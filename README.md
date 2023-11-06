@@ -1,2 +1,2 @@
-# Learning-DirectX-12
-https://www.3dgep.com/category/graphics-programming/directx/
+# DirectX 12 Renderer
+based on https://www.3dgep.com/category/graphics-programming/directx/
