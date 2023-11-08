@@ -5,16 +5,30 @@ namespace DX12Library
     HINSTANCE g_hInst = nullptr;
     HWND g_hWnd = nullptr;
 
+    struct Vertex
+    {
+        XMFLOAT3 position;
+        // XMFLOAT4 color;
+    };
+
     // Pipeline objects.
+    CD3DX12_VIEWPORT g_viewport;
+    CD3DX12_RECT g_scissorRect;
     ComPtr<IDXGISwapChain3> g_swapChain;
     ComPtr<ID3D12Device> g_device;
     ComPtr<ID3D12Resource> g_renderTargets[2];
     ComPtr<ID3D12CommandAllocator> g_commandAllocator;
     ComPtr<ID3D12CommandQueue> g_commandQueue;
+    ComPtr<ID3D12RootSignature> g_rootSignature;
     ComPtr<ID3D12DescriptorHeap> g_rtvHeap;
     ComPtr<ID3D12PipelineState> g_pipelineState;
     ComPtr<ID3D12GraphicsCommandList> g_commandList;
     UINT g_rtvDescriptorSize = 0;
+
+    // App resources.
+    ComPtr<ID3D12Resource> g_vertexBuffer;
+    D3D12_VERTEX_BUFFER_VIEW g_vertexBufferView;
+    UINT8* g_pCbvDataBegin;
 
     // Synchronization objects.
     UINT g_frameIndex = 0;
@@ -275,6 +289,85 @@ namespace DX12Library
         ThrowIfFailed(g_device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&g_commandAllocator)));
 
         // Load the sample assets.
+        // Create a root signature consisting of a descriptor table with a single CBV.
+        {
+            D3D12_FEATURE_DATA_ROOT_SIGNATURE featureData = {};
+
+            // This is the highest version the sample supports. If CheckFeatureSupport succeeds, the HighestVersion returned will not be greater than this.
+            featureData.HighestVersion = D3D_ROOT_SIGNATURE_VERSION_1_1;
+
+            if (FAILED(g_device->CheckFeatureSupport(D3D12_FEATURE_ROOT_SIGNATURE, &featureData, sizeof(featureData))))
+            {
+                featureData.HighestVersion = D3D_ROOT_SIGNATURE_VERSION_1_0;
+            }
+
+            CD3DX12_DESCRIPTOR_RANGE1 ranges[1];
+            CD3DX12_ROOT_PARAMETER1 rootParameters[2];
+
+            ranges[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_CBV, 1, 0, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC);
+            rootParameters[0].InitAsDescriptorTable(1, &ranges[0], D3D12_SHADER_VISIBILITY_VERTEX);
+            rootParameters[1].InitAsConstants(4, 1);
+
+            // Allow input layout and deny uneccessary access to certain pipeline stages.
+            D3D12_ROOT_SIGNATURE_FLAGS rootSignatureFlags =
+                D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT |
+                D3D12_ROOT_SIGNATURE_FLAG_DENY_HULL_SHADER_ROOT_ACCESS |
+                D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS |
+                D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS |
+                D3D12_ROOT_SIGNATURE_FLAG_DENY_PIXEL_SHADER_ROOT_ACCESS;
+
+            CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC rootSignatureDesc;
+            rootSignatureDesc.Init_1_1(_countof(rootParameters), rootParameters, 0, nullptr, rootSignatureFlags);
+            
+            ComPtr<ID3DBlob> signature;
+            ComPtr<ID3DBlob> error;
+            ThrowIfFailed(D3DX12SerializeVersionedRootSignature(&rootSignatureDesc, featureData.HighestVersion, &signature, &error));
+            ThrowIfFailed(g_device->CreateRootSignature(0, signature->GetBufferPointer(), signature->GetBufferSize(), IID_PPV_ARGS(&g_rootSignature)));
+        }
+
+        // Create the pipeline state, which includes compiling and loading shaders.
+        {
+            ComPtr<ID3DBlob> vertexShader;
+            ComPtr<ID3DBlob> pixelShader;
+
+#if defined(_DEBUG)
+            // Enable better shader debugging with the graphics debugging tools.
+            UINT compileFlags = D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION;
+#else
+            UINT compileFlags = 0;
+#endif
+
+            ThrowIfFailed(D3DCompileFromFile(L"Shaders/shaders.hlsl", nullptr, nullptr, "VSMain", "vs_5_0", compileFlags, 0, &vertexShader, nullptr));
+            ThrowIfFailed(D3DCompileFromFile(L"Shaders/shaders.hlsl", nullptr, nullptr, "PSMain", "ps_5_0", compileFlags, 0, &pixelShader, nullptr));
+
+            // Define the vertex input layout.
+            D3D12_INPUT_ELEMENT_DESC inputElementDescs[] =
+            {
+                { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+                { "COLOR", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 }
+            };
+
+            // Describe and create the graphics pipeline state object (PSO).
+            D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc =
+            {
+                .pRootSignature = g_rootSignature.Get(),
+                .VS = CD3DX12_SHADER_BYTECODE(vertexShader.Get()),
+                .PS = CD3DX12_SHADER_BYTECODE(pixelShader.Get()),
+                .BlendState = CD3DX12_BLEND_DESC(D3D12_DEFAULT),
+                .SampleMask = UINT_MAX,
+                .RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT),
+                .DepthStencilState = { .DepthEnable = FALSE,
+                                       .StencilEnable = FALSE},
+                .InputLayout = { inputElementDescs, _countof(inputElementDescs) },
+                .PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE,
+                .NumRenderTargets = 1,
+                .RTVFormats = { DXGI_FORMAT_R8G8B8A8_UNORM, },
+                .SampleDesc = { .Count = 1 }
+            };
+
+            ThrowIfFailed(g_device->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&g_pipelineState)));
+        }
+
         // Create the command list.
         ThrowIfFailed(g_device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, g_commandAllocator.Get(), nullptr, IID_PPV_ARGS(&g_commandList)));
 
@@ -282,7 +375,45 @@ namespace DX12Library
         // to record yet. The main loop expects it to be closed, so close it now.
         ThrowIfFailed(g_commandList->Close());
 
-        // Create synchronization objects.
+        // Create the vertex buffer.
+        {
+            // Define the geometry for a quad.
+            Vertex quadVertices[] =
+            {
+                { { 0.25f, 0.25f * 1280.f / 720.f, 0.0f }, },
+                { { -0.25f, 0.25f * 1280.f / 720.f, 0.0f }, },
+                { { 0.25f, -0.25f * 1280.f / 720.f, 0.0f }, },
+                { { -0.25f, -0.25f * 1280.f / 720.f, 0.0f }, }
+            };
+
+            const UINT vertexBufferSize = sizeof(quadVertices);
+
+            // Note: using upload heaps to transfer static data like vert buffers is not 
+            // recommended. Every time the GPU needs it, the upload heap will be marshalled 
+            // over. Please read up on Default Heap usage. An upload heap is used here for 
+            // code simplicity and because there are very few verts to actually transfer.
+            ThrowIfFailed(g_device->CreateCommittedResource(
+                &CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD),
+                D3D12_HEAP_FLAG_NONE,
+                &CD3DX12_RESOURCE_DESC::Buffer(vertexBufferSize),
+                D3D12_RESOURCE_STATE_GENERIC_READ,
+                nullptr,
+                IID_PPV_ARGS(&g_vertexBuffer)));
+
+            // Copy the quad data to the vertex buffer.
+            UINT8* pVertexDataBegin;
+            CD3DX12_RANGE readRange(0, 0);        // We do not intend to read from this resource on the CPU.
+            ThrowIfFailed(g_vertexBuffer->Map(0, &readRange, reinterpret_cast<void**>(&pVertexDataBegin)));
+            memcpy(pVertexDataBegin, quadVertices, sizeof(quadVertices));
+            g_vertexBuffer->Unmap(0, nullptr);
+
+            // Initialize the vertex buffer view.
+            g_vertexBufferView.BufferLocation = g_vertexBuffer->GetGPUVirtualAddress();
+            g_vertexBufferView.StrideInBytes = sizeof(Vertex);
+            g_vertexBufferView.SizeInBytes = vertexBufferSize;
+        }
+
+        // Create synchronization objects and wait until assets have been uploaded to the GPU.
         {
             ThrowIfFailed(g_device->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&g_fence)));
             g_fenceValue = 1;
@@ -293,6 +424,28 @@ namespace DX12Library
             {
                 ThrowIfFailed(HRESULT_FROM_WIN32(GetLastError()));
             }
+
+            // Wait for the command list to execute; we are reusing the same command 
+            // list in our main loop but for now, we just want to wait for setup to 
+            // complete before continuing.
+            // WAITING FOR THE FRAME TO COMPLETE BEFORE CONTINUING IS NOT BEST PRACTICE.
+            // This is code implemented as such for simplicity. The D3D12HelloFrameBuffering
+            // sample illustrates how to use fences for efficient resource usage and to
+            // maximize GPU utilization.
+
+            // Signal and increment the fence value.
+            const UINT64 fence = g_fenceValue;
+            ThrowIfFailed(g_commandQueue->Signal(g_fence.Get(), fence));
+            g_fenceValue++;
+
+            // Wait until the previous frame is finished.
+            if (g_fence->GetCompletedValue() < fence)
+            {
+                ThrowIfFailed(g_fence->SetEventOnCompletion(fence, g_fenceEvent));
+                WaitForSingleObject(g_fenceEvent, INFINITE);
+            }
+
+            g_frameIndex = g_swapChain->GetCurrentBackBufferIndex();
         }
     }
 
@@ -336,15 +489,41 @@ namespace DX12Library
         // re-recording.
         ThrowIfFailed(g_commandList->Reset(g_commandAllocator.Get(), g_pipelineState.Get()));
 
+        // Set necessary state.
+        struct ConstantColor
+        {
+            FLOAT r;
+            FLOAT g;
+            FLOAT b;
+            FLOAT a;
+        };
+        ConstantColor cColor =
+        {
+            .r = 1.0f,
+            .g = 1.0f,
+            .b = 0.0f,
+            .a = 1.0f
+        };
+        g_commandList->SetGraphicsRoot32BitConstants(0, 4, &cColor, 0);
+
+        g_commandList->SetGraphicsRootSignature(g_rootSignature.Get());
+
+        g_commandList->RSSetViewports(1, &g_viewport);
+        g_commandList->RSSetScissorRects(1, &g_scissorRect);
+
         // Indicate that the back buffer will be used as a render target.
         CD3DX12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::Transition(g_renderTargets[g_frameIndex].Get(), D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET);
         g_commandList->ResourceBarrier(1, &barrier);
 
         CD3DX12_CPU_DESCRIPTOR_HANDLE rtvHandle(g_rtvHeap->GetCPUDescriptorHandleForHeapStart(), g_frameIndex, g_rtvDescriptorSize);
+        g_commandList->OMSetRenderTargets(1, &rtvHandle, FALSE, nullptr);
 
         // Record commands.
         const float clearColor[] = { 0.0f, 0.2f, 0.4f, 1.0f };
         g_commandList->ClearRenderTargetView(rtvHandle, clearColor, 0, nullptr);
+        g_commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+        g_commandList->IASetVertexBuffers(0, 1, &g_vertexBufferView);
+        g_commandList->DrawInstanced(4, 1, 0, 0);
 
         // Indicate that the back buffer will now be used to present.
         barrier = CD3DX12_RESOURCE_BARRIER::Transition(g_renderTargets[g_frameIndex].Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT);
