@@ -1,24 +1,37 @@
+//*********************************************************
+//
+// Copyright (c) Microsoft. All rights reserved.
+// This code is licensed under the MIT License (MIT).
+// THIS CODE IS PROVIDED *AS IS* WITHOUT WARRANTY OF
+// ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING ANY
+// IMPLIED WARRANTIES OF FITNESS FOR A PARTICULAR
+// PURPOSE, MERCHANTABILITY, OR NON-INFRINGEMENT.
+//
+//*********************************************************
+
+// stdafx.h : include file for standard system include files,
+// or project specific include files that are used frequently, but
+// are changed infrequently.
+
 #pragma once
 
-#define WIN32_LEAN_AND_MEAN
-#include <Windows.h>
-#include <shellapi.h> // For CommandLineToArgvW
-
-// The min/max macros conflict with like-named member functions.
-// Only use std::min and std::max defined in <algorithm>
-#if defined(min)
-#undef min
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN             // Exclude rarely-used stuff from Windows headers.
 #endif
 
-#if defined(max)
-#undef max
-#endif
+#include <windows.h>
 
-// In order to define a funtion called CreateWindow, the Windows macro be undefined.
-#if defined(CreateWindow)
-#undef CreateWindow
-#endif
+#include <d3d12.h>
+#include <dxgi1_6.h>
+#include <D3Dcompiler.h>
+#include <DirectXMath.h>
+#include "d3dx12.h"
 
-// Windows Runtime Library. Needed for Microsoft::WRL::ComPtr<> template class.
+#include <string>
 #include <wrl.h>
-using namespace Microsoft::WRL;
+#include <shellapi.h>
+
+#include <DirectXColors.h>
+#include "Resource.h"
+
+constexpr LPCWSTR PSZ_TITLE = L"DX12 Renderer";
