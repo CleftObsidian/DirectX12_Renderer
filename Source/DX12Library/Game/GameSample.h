@@ -18,6 +18,9 @@ namespace DX12Library
 		virtual void Render() = 0;
 
 	protected:
+		static const UINT WIDTH = 1280;
+		static const UINT HEIGHT = 720;
+
 		HINSTANCE m_hInst;
 		HWND m_hWnd;
 

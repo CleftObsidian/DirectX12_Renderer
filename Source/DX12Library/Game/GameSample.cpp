@@ -85,9 +85,9 @@ namespace DX12Library
 
         // Create window
         m_hInst = hInstance;
-        RECT rc = { 0, 0, 1280, 720 };
-        m_viewport = CD3DX12_VIEWPORT(0.0f, 0.0f, 1280.0f, 720.0f);
-        m_scissorRect = CD3DX12_RECT(0, 0, 1280, 720);
+        RECT rc = { 0, 0, WIDTH, HEIGHT };
+        m_viewport = CD3DX12_VIEWPORT(0.0f, 0.0f, static_cast<FLOAT>(WIDTH), static_cast<FLOAT>(HEIGHT));
+        m_scissorRect = CD3DX12_RECT(0, 0, WIDTH, HEIGHT);
         AdjustWindowRect(&rc, WS_OVERLAPPEDWINDOW, FALSE);
         m_hWnd = CreateWindow(L"DX12Renderer", PSZ_TITLE,
             WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX,

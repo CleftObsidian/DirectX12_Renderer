@@ -2,25 +2,18 @@
 
 #include "GameSample.h"
 
-using namespace DirectX;
-
 namespace DX12Library
 {
-	struct Vertex
-	{
-		XMFLOAT3 position;
-	};
-
-	class PushConstantSample : public GameSample
+	class ClearWindowSample : public GameSample
 	{
 	public:
-        PushConstantSample();
-		virtual ~PushConstantSample();
+		ClearWindowSample();
+		virtual ~ClearWindowSample();
 
 		virtual void InitDevice();
-        virtual void CleanupDevice();
+		virtual void CleanupDevice();
 		virtual void Render();
-		
+
 	private:
         static const UINT FRAMECOUNT = 2;
 
@@ -30,19 +23,13 @@ namespace DX12Library
         ComPtr<ID3D12Resource> m_renderTargets[FRAMECOUNT];
         ComPtr<ID3D12CommandAllocator> m_commandAllocator;
         ComPtr<ID3D12CommandQueue> m_commandQueue;
-        ComPtr<ID3D12RootSignature> m_rootSignature;
         ComPtr<ID3D12DescriptorHeap> m_rtvHeap;
         ComPtr<ID3D12PipelineState> m_pipelineState;
         ComPtr<ID3D12GraphicsCommandList> m_commandList;
-        UINT m_rtvDescriptorSize = 0;
-
-        // App resources.
-        ComPtr<ID3D12Resource> m_vertexBuffer;
-        D3D12_VERTEX_BUFFER_VIEW m_vertexBufferView;
-        UINT8* m_pCbvDataBegin;
+        UINT m_rtvDescriptorSize;
 
         // Synchronization objects.
-        UINT m_frameIndex = 0;
+        UINT m_frameIndex;
         HANDLE m_fenceEvent;
         ComPtr<ID3D12Fence> m_fence;
         UINT64 m_fenceValue;
