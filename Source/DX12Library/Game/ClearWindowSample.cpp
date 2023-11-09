@@ -2,8 +2,12 @@
 
 namespace DX12Library
 {
-	ClearWindowSample::ClearWindowSample()
-		: GameSample()
+	ClearWindowSample::ClearWindowSample(_In_ PCWSTR pszGameName)
+		: GameSample(pszGameName)
+        , m_fenceEvent()
+        , m_fenceValue()
+        , m_frameIndex()
+        , m_rtvDescriptorSize()
 	{
 	}
 
@@ -13,6 +17,23 @@ namespace DX12Library
 
 	void ClearWindowSample::InitDevice()
 	{
+        RECT rc;
+        GetClientRect(m_mainWindow->GetWindow(), &rc);
+        UINT uWidth = static_cast<UINT>(rc.right - rc.left);
+        UINT uHeight = static_cast<UINT>(rc.bottom - rc.top);
+
+        {
+            m_viewport.TopLeftX = 0.0f;
+            m_viewport.TopLeftY = 0.0f;
+            m_viewport.Width = static_cast<FLOAT>(uWidth);
+            m_viewport.Height = static_cast<FLOAT>(uHeight);
+
+            m_scissorRect.left = 0;
+            m_scissorRect.top = 0;
+            m_scissorRect.right = static_cast<LONG>(uWidth);
+            m_scissorRect.bottom = static_cast<LONG>(uHeight);
+        }
+
         // Load the rendering pipeline dependencies.
         UINT dxgiFactoryFlags = 0;
 
@@ -94,26 +115,30 @@ namespace DX12Library
         ));
 
         // Describe and create the command queue.
-        D3D12_COMMAND_QUEUE_DESC queueDesc = {};
-        queueDesc.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE;
-        queueDesc.Type = D3D12_COMMAND_LIST_TYPE_DIRECT;
+        D3D12_COMMAND_QUEUE_DESC queueDesc =
+        {
+            .Type = D3D12_COMMAND_LIST_TYPE_DIRECT,
+            .Flags = D3D12_COMMAND_QUEUE_FLAG_NONE
+        };
 
         ThrowIfFailed(m_device->CreateCommandQueue(&queueDesc, IID_PPV_ARGS(&m_commandQueue)));
 
         // Describe and create the swap chain.
-        DXGI_SWAP_CHAIN_DESC1 swapChainDesc = {};
-        swapChainDesc.BufferCount = FRAMECOUNT;
-        swapChainDesc.Width = WIDTH;
-        swapChainDesc.Height = HEIGHT;
-        swapChainDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
-        swapChainDesc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
-        swapChainDesc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
-        swapChainDesc.SampleDesc.Count = 1;
+        DXGI_SWAP_CHAIN_DESC1 swapChainDesc =
+        {
+            .Width = uWidth,
+            .Height = uHeight,
+            .Format = DXGI_FORMAT_R8G8B8A8_UNORM,
+            .SampleDesc = {.Count = 1 },
+            .BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT,
+            .BufferCount = FRAMECOUNT,
+            .SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD
+        };
 
         ComPtr<IDXGISwapChain1> swapChain;
         ThrowIfFailed(factory->CreateSwapChainForHwnd(
             m_commandQueue.Get(),        // Swap chain needs the queue so that it can force a flush on it.
-            m_hWnd,
+            m_mainWindow->GetWindow(),
             &swapChainDesc,
             nullptr,
             nullptr,
@@ -121,7 +146,7 @@ namespace DX12Library
         ));
 
         // This sample does not support fullscreen transitions.
-        ThrowIfFailed(factory->MakeWindowAssociation(m_hWnd, DXGI_MWA_NO_ALT_ENTER));
+        ThrowIfFailed(factory->MakeWindowAssociation(m_mainWindow->GetWindow(), DXGI_MWA_NO_ALT_ENTER));
 
         ThrowIfFailed(swapChain.As(&m_swapChain));
         m_frameIndex = m_swapChain->GetCurrentBackBufferIndex();
@@ -129,10 +154,12 @@ namespace DX12Library
         // Create descriptor heaps.
         {
             // Describe and create a render target view (RTV) descriptor heap.
-            D3D12_DESCRIPTOR_HEAP_DESC rtvHeapDesc = {};
-            rtvHeapDesc.NumDescriptors = FRAMECOUNT;
-            rtvHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
-            rtvHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
+            D3D12_DESCRIPTOR_HEAP_DESC rtvHeapDesc =
+            {
+                .Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV,
+                .NumDescriptors = FRAMECOUNT,
+                .Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE
+            };
             ThrowIfFailed(m_device->CreateDescriptorHeap(&rtvHeapDesc, IID_PPV_ARGS(&m_rtvHeap)));
 
             m_rtvDescriptorSize = m_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
@@ -201,6 +228,10 @@ namespace DX12Library
 
         CloseHandle(m_fenceEvent);
 	}
+
+    void ClearWindowSample::Update()
+    {
+    }
 
 	void ClearWindowSample::Render()
 	{

@@ -4,19 +4,18 @@
 
 namespace DX12Library
 {
-	class ClearWindowSample : public GameSample
+	class ClearWindowSample final : public GameSample
 	{
 	public:
-		ClearWindowSample();
+		ClearWindowSample(_In_ PCWSTR pszGameName);
 		virtual ~ClearWindowSample();
 
 		virtual void InitDevice();
 		virtual void CleanupDevice();
+        virtual void Update();
 		virtual void Render();
 
 	private:
-        static const UINT FRAMECOUNT = 2;
-
         // Pipeline objects.
         ComPtr<IDXGISwapChain3> m_swapChain;
         ComPtr<ID3D12Device> m_device;

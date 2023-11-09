@@ -1,6 +1,7 @@
 #pragma once
 
 #include "DXSampleHelper.h"
+#include "Window/MainWindow.h"
 
 using namespace DirectX;
 
@@ -9,25 +10,28 @@ namespace DX12Library
 	class GameSample
 	{
 	public:
-		GameSample();
+		GameSample(_In_ PCWSTR pszGameName);
 		virtual ~GameSample();
 
-		HRESULT InitWindow(_In_ HINSTANCE hInstance, _In_ INT nCmdShow);
+		HRESULT Initialize(_In_ HINSTANCE hInstance, _In_ INT nCmdShow);
+		INT Run();
+
 		virtual void InitDevice() = 0;
 		virtual void CleanupDevice() = 0;
+		virtual void Update() = 0;
 		virtual void Render() = 0;
 
-	protected:
-		static const UINT WIDTH = 1280;
-		static const UINT HEIGHT = 720;
+		PCWSTR GetGameName() const;
+		std::unique_ptr<MainWindow>& GetWindow();
 
-		HINSTANCE m_hInst;
-		HWND m_hWnd;
+	protected:
+		static const UINT FRAMECOUNT = 2;
+
+		PCWSTR m_pszGameName;
+		std::unique_ptr<MainWindow> m_mainWindow;
 
 		// Pipeline objects.
 		CD3DX12_VIEWPORT m_viewport;
 		CD3DX12_RECT m_scissorRect;
 	};
-
-	
 }

@@ -1,21 +1,24 @@
-#include "PushConstantSample.h"
+#include "TriangleControlSample.h"
 
 namespace DX12Library
 {
-    PushConstantSample::PushConstantSample(_In_ PCWSTR pszGameName)
+	TriangleControlSample::TriangleControlSample(_In_ PCWSTR pszGameName)
 		: GameSample(pszGameName)
-        , m_fenceEvent()
-        , m_fenceValue()
-        , m_pCbvDataBegin()
-        , m_vertexBufferView()
+		, m_fenceEvent()
+		, m_fenceValue()
+		, m_frameIndex(0)
+		, m_rtvDescriptorSize(0)
+		, m_vertexBufferView()
+        , m_constantBufferData{}
+        , m_pCbvDataBegin(nullptr)
 	{
 	}
 
-    PushConstantSample::~PushConstantSample()
+	TriangleControlSample::~TriangleControlSample()
 	{
 	}
 
-	void PushConstantSample::InitDevice()
+	void TriangleControlSample::InitDevice()
 	{
         RECT rc;
         GetClientRect(m_mainWindow->GetWindow(), &rc);
@@ -34,10 +37,10 @@ namespace DX12Library
             m_scissorRect.bottom = static_cast<LONG>(uHeight);
         }
 
-        // Load the rendering pipeline dependencies.
+		// Load the rendering pipeline dependencies.
         UINT dxgiFactoryFlags = 0;
 
-#ifdef _DEBUG
+#if defined(_DEBUG)
         // Enable the debug layer (requires the Graphics Tools "optional feature").
         // NOTE: Enabling the debug layer after device creation will invalidate the active device.
         {
@@ -129,7 +132,7 @@ namespace DX12Library
             .Width = uWidth,
             .Height = uHeight,
             .Format = DXGI_FORMAT_R8G8B8A8_UNORM,
-            .SampleDesc = {.Count = 1 },
+            .SampleDesc = { .Count = 1 },
             .BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT,
             .BufferCount = FRAMECOUNT,
             .SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD
@@ -137,7 +140,7 @@ namespace DX12Library
 
         ComPtr<IDXGISwapChain1> swapChain;
         ThrowIfFailed(factory->CreateSwapChainForHwnd(
-            m_commandQueue.Get(),   // Swap chain needs the queue so that it can force a flush on it.
+            m_commandQueue.Get(),        // Swap chain needs the queue so that it can force a flush on it.
             m_mainWindow->GetWindow(),
             &swapChainDesc,
             nullptr,
@@ -163,6 +166,17 @@ namespace DX12Library
             ThrowIfFailed(m_device->CreateDescriptorHeap(&rtvHeapDesc, IID_PPV_ARGS(&m_rtvHeap)));
 
             m_rtvDescriptorSize = m_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
+
+            // Describe and create a constant buffer view (CBV) descriptor heap.
+            // Flags indicate that this descriptor heap can be bound to the pipeline 
+            // and that descriptors contained in it can be referenced by a root table.
+            D3D12_DESCRIPTOR_HEAP_DESC cbvHeapDesc =
+            {
+                .Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
+                .NumDescriptors = 1,
+                .Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE
+            };
+            ThrowIfFailed(m_device->CreateDescriptorHeap(&cbvHeapDesc, IID_PPV_ARGS(&m_cbvHeap)));
         }
 
         // Create frame resources.
@@ -194,16 +208,19 @@ namespace DX12Library
                 featureData.HighestVersion = D3D_ROOT_SIGNATURE_VERSION_1_0;
             }
 
+            CD3DX12_DESCRIPTOR_RANGE1 ranges[1];
             CD3DX12_ROOT_PARAMETER1 rootParameters[1];
 
-            rootParameters[0].InitAsConstants(4, 0);
+            ranges[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_CBV, 1, 0, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC);
+            rootParameters[0].InitAsDescriptorTable(1, &ranges[0], D3D12_SHADER_VISIBILITY_VERTEX);
 
             // Allow input layout and deny uneccessary access to certain pipeline stages.
             D3D12_ROOT_SIGNATURE_FLAGS rootSignatureFlags =
                 D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT |
                 D3D12_ROOT_SIGNATURE_FLAG_DENY_HULL_SHADER_ROOT_ACCESS |
                 D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS |
-                D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS;
+                D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS |
+                D3D12_ROOT_SIGNATURE_FLAG_DENY_PIXEL_SHADER_ROOT_ACCESS;
 
             CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC rootSignatureDesc;
             rootSignatureDesc.Init_1_1(_countof(rootParameters), rootParameters, 0, nullptr, rootSignatureFlags);
@@ -226,8 +243,8 @@ namespace DX12Library
             UINT compileFlags = 0;
 #endif
 
-            ThrowIfFailed(D3DCompileFromFile(L"Shaders/shaders.hlsl", nullptr, nullptr, "VSMain", "vs_5_1", compileFlags, 0, &vertexShader, nullptr));
-            ThrowIfFailed(D3DCompileFromFile(L"Shaders/shaders.hlsl", nullptr, nullptr, "PSMain", "ps_5_1", compileFlags, 0, &pixelShader, nullptr));
+            ThrowIfFailed(D3DCompileFromFile(L"Shaders/shadersTriangle.hlsl", nullptr, nullptr, "VSMain", "vs_5_1", compileFlags, 0, &vertexShader, nullptr));
+            ThrowIfFailed(D3DCompileFromFile(L"Shaders/shadersTriangle.hlsl", nullptr, nullptr, "PSMain", "ps_5_1", compileFlags, 0, &pixelShader, nullptr));
 
             // Define the vertex input layout.
             D3D12_INPUT_ELEMENT_DESC inputElementDescs[] =
@@ -245,7 +262,7 @@ namespace DX12Library
                 .SampleMask = UINT_MAX,
                 .RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT),
                 .DepthStencilState = {.DepthEnable = FALSE,
-                                       .StencilEnable = FALSE},
+                                      .StencilEnable = FALSE},
                 .InputLayout = { inputElementDescs, _countof(inputElementDescs) },
                 .PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE,
                 .NumRenderTargets = 1,
@@ -257,7 +274,7 @@ namespace DX12Library
         }
 
         // Create the command list.
-        ThrowIfFailed(m_device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, m_commandAllocator.Get(), nullptr, IID_PPV_ARGS(&m_commandList)));
+        ThrowIfFailed(m_device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, m_commandAllocator.Get(), m_pipelineState.Get(), IID_PPV_ARGS(&m_commandList)));
 
         // Command lists are created in the recording state, but there is nothing
         // to record yet. The main loop expects it to be closed, so close it now.
@@ -265,41 +282,70 @@ namespace DX12Library
 
         // Create the vertex buffer.
         {
-            // Define the geometry for a quad.
-            Vertex quadVertices[] =
+            // Define the geometry for a triangle.
+            Vertex triangleVertices[] =
             {
-                {.position = { 1.0f, 3.f, 0.0f }, },
-                {.position = { 1.f, -1.0f, 0.0f }, },
-                {.position = { -3.f, -1.f, 0.0f }, },
+                { { 0.0f, 0.25f, 0.0f }, },
+                { { 0.25f, -0.25f, 0.0f }, },
+                { { -0.25f, -0.25f, 0.0f }, }
             };
 
-            const UINT vertexBufferSize = sizeof(quadVertices);
+            const UINT vertexBufferSize = sizeof(triangleVertices);
 
             // Note: using upload heaps to transfer static data like vert buffers is not 
             // recommended. Every time the GPU needs it, the upload heap will be marshalled 
             // over. Please read up on Default Heap usage. An upload heap is used here for 
             // code simplicity and because there are very few verts to actually transfer.
             CD3DX12_HEAP_PROPERTIES heapProperties(D3D12_HEAP_TYPE_UPLOAD);
-            CD3DX12_RESOURCE_DESC bufferDesc = CD3DX12_RESOURCE_DESC::Buffer(vertexBufferSize);
+            CD3DX12_RESOURCE_DESC resourceDesc = CD3DX12_RESOURCE_DESC::Buffer(vertexBufferSize);
             ThrowIfFailed(m_device->CreateCommittedResource(
                 &heapProperties,
                 D3D12_HEAP_FLAG_NONE,
-                &bufferDesc,
+                &resourceDesc,
                 D3D12_RESOURCE_STATE_GENERIC_READ,
                 nullptr,
                 IID_PPV_ARGS(&m_vertexBuffer)));
 
-            // Copy the quad data to the vertex buffer.
+            // Copy the triangle data to the vertex buffer.
             UINT8* pVertexDataBegin;
             CD3DX12_RANGE readRange(0, 0);        // We do not intend to read from this resource on the CPU.
             ThrowIfFailed(m_vertexBuffer->Map(0, &readRange, reinterpret_cast<void**>(&pVertexDataBegin)));
-            memcpy(pVertexDataBegin, quadVertices, sizeof(quadVertices));
+            memcpy(pVertexDataBegin, triangleVertices, sizeof(triangleVertices));
             m_vertexBuffer->Unmap(0, nullptr);
 
             // Initialize the vertex buffer view.
             m_vertexBufferView.BufferLocation = m_vertexBuffer->GetGPUVirtualAddress();
             m_vertexBufferView.StrideInBytes = sizeof(Vertex);
             m_vertexBufferView.SizeInBytes = vertexBufferSize;
+        }
+
+        // Create the constant buffer.
+        {
+            const UINT constantBufferSize = sizeof(ColorConstantBuffer);    // CB size is required to be 256-byte aligned.
+
+            CD3DX12_HEAP_PROPERTIES heapProperties(D3D12_HEAP_TYPE_UPLOAD);
+            CD3DX12_RESOURCE_DESC resourceDesc = CD3DX12_RESOURCE_DESC::Buffer(constantBufferSize);
+            ThrowIfFailed(m_device->CreateCommittedResource(
+                &heapProperties,
+                D3D12_HEAP_FLAG_NONE,
+                &resourceDesc,
+                D3D12_RESOURCE_STATE_GENERIC_READ,
+                nullptr,
+                IID_PPV_ARGS(&m_constantBuffer)));
+
+            // Describe and create a constant buffer view.
+            D3D12_CONSTANT_BUFFER_VIEW_DESC cbvDesc =
+            {
+                .BufferLocation = m_constantBuffer->GetGPUVirtualAddress(),
+                .SizeInBytes = constantBufferSize
+            };
+            m_device->CreateConstantBufferView(&cbvDesc, m_cbvHeap->GetCPUDescriptorHandleForHeapStart());
+
+            // Map and initialize the constant buffer. We don't unmap this until the
+            // app closes. Keeping things mapped for the lifetime of the resource is okay.
+            CD3DX12_RANGE readRange(0, 0);        // We do not intend to read from this resource on the CPU.
+            ThrowIfFailed(m_constantBuffer->Map(0, &readRange, reinterpret_cast<void**>(&m_pCbvDataBegin)));
+            memcpy(m_pCbvDataBegin, &m_constantBufferData, sizeof(m_constantBufferData));
         }
 
         // Create synchronization objects and wait until assets have been uploaded to the GPU.
@@ -338,38 +384,51 @@ namespace DX12Library
         }
 	}
 
-    void PushConstantSample::CleanupDevice()
+	void TriangleControlSample::CleanupDevice()
+	{
+		// Ensure that the GPU is no longer referencing resources that are about to be
+		// cleaned up by the destructor.
+
+		// WAITING FOR THE FRAME TO COMPLETE BEFORE CONTINUING IS NOT BEST PRACTICE.
+		// This is code implemented as such for simplicity. The D3D12HelloFrameBuffering
+		// sample illustrates how to use fences for efficient resource usage and to
+		// maximize GPU utilization.
+
+		// Signal and increment the fence value.
+		const UINT64 fence = m_fenceValue;
+		ThrowIfFailed(m_commandQueue->Signal(m_fence.Get(), fence));
+		++m_fenceValue;
+
+		// Wait until the previous frame is finished.
+		if (m_fence->GetCompletedValue() < fence)
+		{
+			ThrowIfFailed(m_fence->SetEventOnCompletion(fence, m_fenceEvent));
+			WaitForSingleObject(m_fenceEvent, INFINITE);
+		}
+
+		m_frameIndex = m_swapChain->GetCurrentBackBufferIndex();
+
+		CloseHandle(m_fenceEvent);
+	}
+
+    void TriangleControlSample::Update()
     {
-        // Ensure that the GPU is no longer referencing resources that are about to be
-        // cleaned up by the destructor.
-
-        // WAITING FOR THE FRAME TO COMPLETE BEFORE CONTINUING IS NOT BEST PRACTICE.
-        // This is code implemented as such for simplicity. The D3D12HelloFrameBuffering
-        // sample illustrates how to use fences for efficient resource usage and to
-        // maximize GPU utilization.
-
-        // Signal and increment the fence value.
-        const UINT64 fence = m_fenceValue;
-        ThrowIfFailed(m_commandQueue->Signal(m_fence.Get(), fence));
-        ++m_fenceValue;
-
-        // Wait until the previous frame is finished.
-        if (m_fence->GetCompletedValue() < fence)
+        if (m_mainWindow->GetGameMode() == 1)
         {
-            ThrowIfFailed(m_fence->SetEventOnCompletion(fence, m_fenceEvent));
-            WaitForSingleObject(m_fenceEvent, INFINITE);
+            m_constantBufferData.color = XMFLOAT4(1.0f, 0.0f, 0.0f, 1.0f);
         }
-
-        m_frameIndex = m_swapChain->GetCurrentBackBufferIndex();
-
-        CloseHandle(m_fenceEvent);
+        if (m_mainWindow->GetGameMode() == 2)
+        {
+            m_constantBufferData.color = XMFLOAT4(0.0f, 1.0f, 0.0f, 1.0f);
+        }
+        if (m_mainWindow->GetGameMode() == 3)
+        {
+            m_constantBufferData.color = XMFLOAT4(0.0f, 0.0f, 1.0f, 1.0f);
+        }
+        memcpy(m_pCbvDataBegin, &m_constantBufferData, sizeof(m_constantBufferData));
     }
 
-    void PushConstantSample::Update()
-    {
-    }
-
-	void PushConstantSample::Render()
+	void TriangleControlSample::Render()
 	{
         // Record all the commands we need to render the scene into the command list.
         // Command list allocators can only be reset when the associated 
@@ -384,22 +443,11 @@ namespace DX12Library
 
         // Set necessary state.
         m_commandList->SetGraphicsRootSignature(m_rootSignature.Get());
-        struct ConstantColor
-        {
-            FLOAT r;
-            FLOAT g;
-            FLOAT b;
-            FLOAT a;
-        };
-        ConstantColor cColor =
-        {
-            .r = 1.0f,
-            .g = 0.5f,
-            .b = 0.0f,
-            .a = 1.0f
-        };
-        m_commandList->SetGraphicsRoot32BitConstants(0, 4, &cColor, 0);
 
+        ID3D12DescriptorHeap* ppHeaps[] = { m_cbvHeap.Get() };
+        m_commandList->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
+
+        m_commandList->SetGraphicsRootDescriptorTable(0, m_cbvHeap->GetGPUDescriptorHandleForHeapStart());
         m_commandList->RSSetViewports(1, &m_viewport);
         m_commandList->RSSetScissorRects(1, &m_scissorRect);
 
