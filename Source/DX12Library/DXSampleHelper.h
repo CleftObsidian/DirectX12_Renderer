@@ -41,6 +41,31 @@ inline void ThrowIfFailed(HRESULT hr)
 {
     if (FAILED(hr))
     {
+        if (FACILITY_WINDOWS == HRESULT_FACILITY(hr))
+        {
+            hr = HRESULT_CODE(hr);
+        }
+
+        TCHAR* szErrMsg;
+        if (FormatMessage(
+            FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM,
+            nullptr,
+            hr,
+            MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
+            reinterpret_cast<LPTSTR>(&szErrMsg),
+            0,
+            nullptr
+        ) != 0)
+        {
+            //os << szErrMsg << std::endl;
+            OutputDebugString(szErrMsg);
+            LocalFree(szErrMsg);
+        }
+        else
+        {
+            OutputDebugString(L"No");
+        }
+
         throw HrException(hr);
     }
 }

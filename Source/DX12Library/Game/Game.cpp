@@ -55,7 +55,7 @@ namespace DX12Library
         case WM_CLOSE:
             if (MessageBox(hWnd,
                 L"Really quit?",
-                L"DX12 Renderer",
+                PSZ_TITLE,
                 MB_OKCANCEL) == IDOK)
             {
                 DestroyWindow(hWnd);
@@ -110,8 +110,10 @@ namespace DX12Library
         // Create window
         g_hInst = hInstance;
         RECT rc = { 0, 0, 1280, 720 };
+        g_viewport = CD3DX12_VIEWPORT(0.0f, 0.0f, 1280.0f, 720.0f);
+        g_scissorRect = CD3DX12_RECT(0, 0, 1280, 720);
         AdjustWindowRect(&rc, WS_OVERLAPPEDWINDOW, FALSE);
-        g_hWnd = CreateWindow(L"DX12Renderer", L"DX12 : Window",
+        g_hWnd = CreateWindow(L"DX12Renderer", PSZ_TITLE,
             WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX,
             CW_USEDEFAULT, CW_USEDEFAULT, rc.right - rc.left, rc.bottom - rc.top, nullptr, nullptr, hInstance,
             nullptr);
@@ -236,8 +238,7 @@ namespace DX12Library
             .Width = 1280,
             .Height = 720,
             .Format = DXGI_FORMAT_R8G8B8A8_UNORM,
-            .SampleDesc = {
-                .Count = 1},
+            .SampleDesc = { .Count = 1 },
             .BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT,
             .BufferCount = 2, // frame count
             .SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD
@@ -301,20 +302,20 @@ namespace DX12Library
                 featureData.HighestVersion = D3D_ROOT_SIGNATURE_VERSION_1_0;
             }
 
-            CD3DX12_DESCRIPTOR_RANGE1 ranges[1];
-            CD3DX12_ROOT_PARAMETER1 rootParameters[2];
+            //CD3DX12_DESCRIPTOR_RANGE1 ranges[1];
+            CD3DX12_ROOT_PARAMETER1 rootParameters[1];
 
-            ranges[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_CBV, 1, 0, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC);
-            rootParameters[0].InitAsDescriptorTable(1, &ranges[0], D3D12_SHADER_VISIBILITY_VERTEX);
-            rootParameters[1].InitAsConstants(4, 1);
+            //ranges[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_CBV, 1, 0, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC);
+            //rootParameters[0].InitAsDescriptorTable(1, &ranges[0], D3D12_SHADER_VISIBILITY_VERTEX);
+            rootParameters[0].InitAsConstants(4, 0);
 
             // Allow input layout and deny uneccessary access to certain pipeline stages.
             D3D12_ROOT_SIGNATURE_FLAGS rootSignatureFlags =
                 D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT |
                 D3D12_ROOT_SIGNATURE_FLAG_DENY_HULL_SHADER_ROOT_ACCESS |
                 D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS |
-                D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS |
-                D3D12_ROOT_SIGNATURE_FLAG_DENY_PIXEL_SHADER_ROOT_ACCESS;
+                D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS;
+                //D3D12_ROOT_SIGNATURE_FLAG_DENY_PIXEL_SHADER_ROOT_ACCESS;
 
             CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC rootSignatureDesc;
             rootSignatureDesc.Init_1_1(_countof(rootParameters), rootParameters, 0, nullptr, rootSignatureFlags);
@@ -337,14 +338,14 @@ namespace DX12Library
             UINT compileFlags = 0;
 #endif
 
-            ThrowIfFailed(D3DCompileFromFile(L"Shaders/shaders.hlsl", nullptr, nullptr, "VSMain", "vs_5_0", compileFlags, 0, &vertexShader, nullptr));
-            ThrowIfFailed(D3DCompileFromFile(L"Shaders/shaders.hlsl", nullptr, nullptr, "PSMain", "ps_5_0", compileFlags, 0, &pixelShader, nullptr));
+            ThrowIfFailed(D3DCompileFromFile(L"Shaders/shaders.hlsl", nullptr, nullptr, "VSMain", "vs_5_1", compileFlags, 0, &vertexShader, nullptr));
+            ThrowIfFailed(D3DCompileFromFile(L"Shaders/shaders.hlsl", nullptr, nullptr, "PSMain", "ps_5_1", compileFlags, 0, &pixelShader, nullptr));
 
             // Define the vertex input layout.
             D3D12_INPUT_ELEMENT_DESC inputElementDescs[] =
             {
                 { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-                { "COLOR", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 }
+                //{ "COLOR", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 }
             };
 
             // Describe and create the graphics pipeline state object (PSO).
@@ -380,10 +381,9 @@ namespace DX12Library
             // Define the geometry for a quad.
             Vertex quadVertices[] =
             {
-                { { 0.25f, 0.25f * 1280.f / 720.f, 0.0f }, },
-                { { -0.25f, 0.25f * 1280.f / 720.f, 0.0f }, },
-                { { 0.25f, -0.25f * 1280.f / 720.f, 0.0f }, },
-                { { -0.25f, -0.25f * 1280.f / 720.f, 0.0f }, }
+                { .position = { 1.0f, 3.f, 0.0f }, },
+                { .position = { 1.f, -1.0f, 0.0f }, },
+                { .position = { -3.f, -1.f, 0.0f }, },
             };
 
             const UINT vertexBufferSize = sizeof(quadVertices);
@@ -392,10 +392,12 @@ namespace DX12Library
             // recommended. Every time the GPU needs it, the upload heap will be marshalled 
             // over. Please read up on Default Heap usage. An upload heap is used here for 
             // code simplicity and because there are very few verts to actually transfer.
+            CD3DX12_HEAP_PROPERTIES heapProperties(D3D12_HEAP_TYPE_UPLOAD);
+            CD3DX12_RESOURCE_DESC bufferDesc = CD3DX12_RESOURCE_DESC::Buffer(vertexBufferSize);
             ThrowIfFailed(g_device->CreateCommittedResource(
-                &CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD),
+                &heapProperties,
                 D3D12_HEAP_FLAG_NONE,
-                &CD3DX12_RESOURCE_DESC::Buffer(vertexBufferSize),
+                &bufferDesc,
                 D3D12_RESOURCE_STATE_GENERIC_READ,
                 nullptr,
                 IID_PPV_ARGS(&g_vertexBuffer)));
@@ -490,6 +492,7 @@ namespace DX12Library
         ThrowIfFailed(g_commandList->Reset(g_commandAllocator.Get(), g_pipelineState.Get()));
 
         // Set necessary state.
+        g_commandList->SetGraphicsRootSignature(g_rootSignature.Get());
         struct ConstantColor
         {
             FLOAT r;
@@ -500,13 +503,11 @@ namespace DX12Library
         ConstantColor cColor =
         {
             .r = 1.0f,
-            .g = 1.0f,
+            .g = 0.5f,
             .b = 0.0f,
             .a = 1.0f
         };
         g_commandList->SetGraphicsRoot32BitConstants(0, 4, &cColor, 0);
-
-        g_commandList->SetGraphicsRootSignature(g_rootSignature.Get());
 
         g_commandList->RSSetViewports(1, &g_viewport);
         g_commandList->RSSetScissorRects(1, &g_scissorRect);
@@ -523,7 +524,7 @@ namespace DX12Library
         g_commandList->ClearRenderTargetView(rtvHandle, clearColor, 0, nullptr);
         g_commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
         g_commandList->IASetVertexBuffers(0, 1, &g_vertexBufferView);
-        g_commandList->DrawInstanced(4, 1, 0, 0);
+        g_commandList->DrawInstanced(3, 1, 0, 0);
 
         // Indicate that the back buffer will now be used to present.
         barrier = CD3DX12_RESOURCE_BARRIER::Transition(g_renderTargets[g_frameIndex].Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT);
