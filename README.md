@@ -1,3 +1,3 @@
 # DirectX 12 Renderer
-based on https://www.3dgep.com/category/graphics-programming/directx/  
+based on [MiniEngine](https://github.com/microsoft/DirectX-Graphics-Samples)  
 working on C++20 with Visual Studio 2022
