@@ -4,29 +4,23 @@
 
 namespace DX12Library
 {
-	class TriangleControlSample final : public GameSample
+	class SimpleCubeSample : public GameSample
 	{
 	public:
-		TriangleControlSample(_In_ PCWSTR pszGameName);
-		virtual ~TriangleControlSample();
+		SimpleCubeSample(_In_ PCWSTR pszGameName);
+		~SimpleCubeSample();
 
         virtual void InitDevice();
         virtual void CleanupDevice();
         virtual void Update(_In_ FLOAT deltaTime);
         virtual void Render();
 
-	private:
-        struct Vertex
+    private:
+        struct VertexPosColor
         {
             XMFLOAT3 position;
+            XMFLOAT3 color;
         };
-
-        struct ColorConstantBuffer
-        {
-            XMFLOAT4 color;
-            float padding[60]; // Padding so the constant buffer is 256-byte aligned.
-        };
-        static_assert((sizeof(ColorConstantBuffer) % 256) == 0, "Constant Buffer size must be 256-byte aligned");
 
         // Pipeline objects.
         ComPtr<IDXGISwapChain3> m_swapChain;
@@ -36,7 +30,7 @@ namespace DX12Library
         ComPtr<ID3D12CommandQueue> m_commandQueue;
         ComPtr<ID3D12RootSignature> m_rootSignature;
         ComPtr<ID3D12DescriptorHeap> m_rtvHeap;
-        ComPtr<ID3D12DescriptorHeap> m_cbvHeap;
+        ComPtr<ID3D12DescriptorHeap> m_dsvHeap;
         ComPtr<ID3D12PipelineState> m_pipelineState;
         ComPtr<ID3D12GraphicsCommandList> m_commandList;
         UINT m_rtvDescriptorSize = 0;
@@ -44,14 +38,18 @@ namespace DX12Library
         // App resources.
         ComPtr<ID3D12Resource> m_vertexBuffer;
         D3D12_VERTEX_BUFFER_VIEW m_vertexBufferView;
-        ComPtr<ID3D12Resource> m_constantBuffer;
-        ColorConstantBuffer m_constantBufferData;
-        UINT8* m_pCbvDataBegin;
+        ComPtr<ID3D12Resource> m_indexBuffer;
+        D3D12_INDEX_BUFFER_VIEW m_indexBufferView;
+        ComPtr<ID3D12Resource> m_depthBuffer;
 
         // Synchronization objects.
         UINT m_frameIndex = 0;
         HANDLE m_fenceEvent;
         ComPtr<ID3D12Fence> m_fence;
         UINT64 m_fenceValue;
+
+        XMMATRIX m_modelMatrix;
+        XMMATRIX m_viewMatrix;
+        XMMATRIX m_projectionMatrix;
 	};
 }

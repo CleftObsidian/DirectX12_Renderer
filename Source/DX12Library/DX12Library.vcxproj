@@ -108,6 +108,7 @@ copy "$(TargetDir)" "$(SolutionDir)..\Library\x64\Release"</Command>
     <ClCompile Include="Game\ClearWindowSample.cpp" />
     <ClCompile Include="Game\GameSample.cpp" />
     <ClCompile Include="Game\PushConstantSample.cpp" />
+    <ClCompile Include="Game\SimpleCubeSample.cpp" />
     <ClCompile Include="Game\TriangleControlSample.cpp" />
     <ClCompile Include="Window\MainWindow.cpp" />
   </ItemGroup>
@@ -118,6 +119,7 @@ copy "$(TargetDir)" "$(SolutionDir)..\Library\x64\Release"</Command>
     <ClInclude Include="Game\GameSample.h" />
     <ClInclude Include="Common.h" />
     <ClInclude Include="Game\PushConstantSample.h" />
+    <ClInclude Include="Game\SimpleCubeSample.h" />
     <ClInclude Include="Game\TriangleControlSample.h" />
     <ClInclude Include="Resource.h" />
     <ClInclude Include="Window\BaseWindow.h" />

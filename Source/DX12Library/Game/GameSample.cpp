@@ -26,6 +26,16 @@ namespace DX12Library
 
     INT GameSample::Run()
     {
+        // Initialize time
+        LARGE_INTEGER LastTime;
+        LARGE_INTEGER CurrentTime;
+        LARGE_INTEGER Frequency;
+
+        FLOAT deltaTime;
+
+        QueryPerformanceFrequency(&Frequency);
+        QueryPerformanceCounter(&LastTime);
+
         // Main message loop
         MSG msg = { 0 };
         while (WM_QUIT != msg.message)
@@ -38,8 +48,14 @@ namespace DX12Library
             }
             else
             {
+                // Update our time
+                QueryPerformanceCounter(&CurrentTime);
+                deltaTime = static_cast<FLOAT>(CurrentTime.QuadPart - LastTime.QuadPart);
+                deltaTime /= static_cast<FLOAT>(Frequency.QuadPart);
+                LastTime = CurrentTime;
+
                 // Render
-                Update();
+                Update(deltaTime);
                 Render();
             }
         }

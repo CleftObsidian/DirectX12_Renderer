@@ -1,24 +1,26 @@
-#include "TriangleControlSample.h"
+#include "SimpleCubeSample.h"
 
 namespace DX12Library
 {
-	TriangleControlSample::TriangleControlSample(_In_ PCWSTR pszGameName)
+	SimpleCubeSample::SimpleCubeSample(_In_ PCWSTR pszGameName)
 		: GameSample(pszGameName)
 		, m_fenceEvent()
 		, m_fenceValue()
 		, m_frameIndex(0)
 		, m_rtvDescriptorSize(0)
 		, m_vertexBufferView()
-        , m_constantBufferData{}
-        , m_pCbvDataBegin(nullptr)
+		, m_indexBufferView()
+		, m_modelMatrix(XMMatrixIdentity())
+		, m_viewMatrix()
+		, m_projectionMatrix()
 	{
 	}
 
-	TriangleControlSample::~TriangleControlSample()
+	SimpleCubeSample::~SimpleCubeSample()
 	{
 	}
 
-	void TriangleControlSample::InitDevice()
+	void SimpleCubeSample::InitDevice()
 	{
         RECT rc;
         GetClientRect(m_mainWindow->GetWindow(), &rc);
@@ -37,7 +39,7 @@ namespace DX12Library
             m_scissorRect.bottom = static_cast<LONG>(uHeight);
         }
 
-		// Load the rendering pipeline dependencies.
+        // Load the rendering pipeline dependencies.
         UINT dxgiFactoryFlags = 0;
 
 #if defined(_DEBUG)
@@ -132,7 +134,7 @@ namespace DX12Library
             .Width = uWidth,
             .Height = uHeight,
             .Format = DXGI_FORMAT_R8G8B8A8_UNORM,
-            .SampleDesc = { .Count = 1 },
+            .SampleDesc = {.Count = 1 },
             .BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT,
             .BufferCount = FRAMECOUNT,
             .SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD
@@ -167,16 +169,14 @@ namespace DX12Library
 
             m_rtvDescriptorSize = m_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
 
-            // Describe and create a constant buffer view (CBV) descriptor heap.
-            // Flags indicate that this descriptor heap can be bound to the pipeline 
-            // and that descriptors contained in it can be referenced by a root table.
-            D3D12_DESCRIPTOR_HEAP_DESC cbvHeapDesc =
+            // Describe and create a depth stencil view (DSV) descriptor heap.
+            D3D12_DESCRIPTOR_HEAP_DESC dsvHeapDesc =
             {
-                .Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
+                .Type = D3D12_DESCRIPTOR_HEAP_TYPE_DSV,
                 .NumDescriptors = 1,
-                .Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE
+                .Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE
             };
-            ThrowIfFailed(m_device->CreateDescriptorHeap(&cbvHeapDesc, IID_PPV_ARGS(&m_cbvHeap)));
+            ThrowIfFailed(m_device->CreateDescriptorHeap(&dsvHeapDesc, IID_PPV_ARGS(&m_dsvHeap)));
         }
 
         // Create frame resources.
@@ -212,7 +212,7 @@ namespace DX12Library
             CD3DX12_ROOT_PARAMETER1 rootParameters[1];
 
             ranges[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_CBV, 1, 0, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC);
-            rootParameters[0].InitAsDescriptorTable(1, &ranges[0], D3D12_SHADER_VISIBILITY_VERTEX);
+            rootParameters[0].InitAsConstants(sizeof(XMMATRIX) / 4, 0, 0, D3D12_SHADER_VISIBILITY_VERTEX);
 
             // Allow input layout and deny uneccessary access to certain pipeline stages.
             D3D12_ROOT_SIGNATURE_FLAGS rootSignatureFlags =
@@ -243,13 +243,14 @@ namespace DX12Library
             UINT compileFlags = 0;
 #endif
 
-            ThrowIfFailed(D3DCompileFromFile(L"Shaders/shadersTriangle.hlsl", nullptr, nullptr, "VSMain", "vs_5_1", compileFlags, 0, &vertexShader, nullptr));
-            ThrowIfFailed(D3DCompileFromFile(L"Shaders/shadersTriangle.hlsl", nullptr, nullptr, "PSMain", "ps_5_1", compileFlags, 0, &pixelShader, nullptr));
+            ThrowIfFailed(D3DCompileFromFile(L"Shaders/shadersCube.hlsl", nullptr, nullptr, "VSMain", "vs_5_1", compileFlags, 0, &vertexShader, nullptr));
+            ThrowIfFailed(D3DCompileFromFile(L"Shaders/shadersCube.hlsl", nullptr, nullptr, "PSMain", "ps_5_1", compileFlags, 0, &pixelShader, nullptr));
 
             // Define the vertex input layout.
             D3D12_INPUT_ELEMENT_DESC inputElementDescs[] =
             {
                 { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+                { "COLOR", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
             };
 
             // Describe and create the graphics pipeline state object (PSO).
@@ -267,6 +268,7 @@ namespace DX12Library
                 .PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE,
                 .NumRenderTargets = 1,
                 .RTVFormats = { DXGI_FORMAT_R8G8B8A8_UNORM, },
+                .DSVFormat = DXGI_FORMAT_D32_FLOAT,
                 .SampleDesc = {.Count = 1 }
             };
 
@@ -283,14 +285,19 @@ namespace DX12Library
         // Create the vertex buffer.
         {
             // Define the geometry for a triangle.
-            Vertex triangleVertices[] =
+            VertexPosColor vertices[] =
             {
-                { { 0.0f, 0.25f, 0.0f }, },
-                { { 0.25f, -0.25f, 0.0f }, },
-                { { -0.25f, -0.25f, 0.0f }, }
+                { XMFLOAT3(-1.0f, -1.0f, -1.0f), XMFLOAT3(0.0f, 0.0f, 0.0f) }, // 0
+                { XMFLOAT3(-1.0f,  1.0f, -1.0f), XMFLOAT3(0.0f, 1.0f, 0.0f) }, // 1
+                { XMFLOAT3(1.0f,  1.0f, -1.0f), XMFLOAT3(1.0f, 1.0f, 0.0f) }, // 2
+                { XMFLOAT3(1.0f, -1.0f, -1.0f), XMFLOAT3(1.0f, 0.0f, 0.0f) }, // 3
+                { XMFLOAT3(-1.0f, -1.0f,  1.0f), XMFLOAT3(0.0f, 0.0f, 1.0f) }, // 4
+                { XMFLOAT3(-1.0f,  1.0f,  1.0f), XMFLOAT3(0.0f, 1.0f, 1.0f) }, // 5
+                { XMFLOAT3(1.0f,  1.0f,  1.0f), XMFLOAT3(1.0f, 1.0f, 1.0f) }, // 6
+                { XMFLOAT3(1.0f, -1.0f,  1.0f), XMFLOAT3(1.0f, 0.0f, 1.0f) }  // 7
             };
 
-            const UINT vertexBufferSize = sizeof(triangleVertices);
+            const UINT vertexBufferSize = sizeof(vertices);
 
             // Note: using upload heaps to transfer static data like vert buffers is not 
             // recommended. Every time the GPU needs it, the upload heap will be marshalled 
@@ -310,42 +317,79 @@ namespace DX12Library
             UINT8* pVertexDataBegin;
             CD3DX12_RANGE readRange(0, 0);        // We do not intend to read from this resource on the CPU.
             ThrowIfFailed(m_vertexBuffer->Map(0, &readRange, reinterpret_cast<void**>(&pVertexDataBegin)));
-            memcpy(pVertexDataBegin, triangleVertices, sizeof(triangleVertices));
+            memcpy(pVertexDataBegin, vertices, sizeof(vertices));
             m_vertexBuffer->Unmap(0, nullptr);
 
             // Initialize the vertex buffer view.
             m_vertexBufferView.BufferLocation = m_vertexBuffer->GetGPUVirtualAddress();
-            m_vertexBufferView.StrideInBytes = sizeof(Vertex);
+            m_vertexBufferView.StrideInBytes = sizeof(VertexPosColor);
             m_vertexBufferView.SizeInBytes = vertexBufferSize;
         }
 
-        // Create the constant buffer.
+        // Create the index buffer.
         {
-            const UINT constantBufferSize = sizeof(ColorConstantBuffer);    // CB size is required to be 256-byte aligned.
+            WORD indicies[36] =
+            {
+                0, 1, 2, 0, 2, 3,
+                4, 6, 5, 4, 7, 6,
+                4, 5, 1, 4, 1, 0,
+                3, 2, 6, 3, 6, 7,
+                1, 5, 6, 1, 6, 2,
+                4, 0, 3, 4, 3, 7
+            };
+
+            const UINT indexBufferSize = sizeof(indicies);
 
             CD3DX12_HEAP_PROPERTIES heapProperties(D3D12_HEAP_TYPE_UPLOAD);
-            CD3DX12_RESOURCE_DESC resourceDesc = CD3DX12_RESOURCE_DESC::Buffer(constantBufferSize);
+            CD3DX12_RESOURCE_DESC resourceDesc = CD3DX12_RESOURCE_DESC::Buffer(indexBufferSize);
             ThrowIfFailed(m_device->CreateCommittedResource(
                 &heapProperties,
                 D3D12_HEAP_FLAG_NONE,
                 &resourceDesc,
                 D3D12_RESOURCE_STATE_GENERIC_READ,
                 nullptr,
-                IID_PPV_ARGS(&m_constantBuffer)));
+                IID_PPV_ARGS(&m_indexBuffer)));
 
-            // Describe and create a constant buffer view.
-            D3D12_CONSTANT_BUFFER_VIEW_DESC cbvDesc =
+            UINT8* pIndexDataBegin;
+            CD3DX12_RANGE readRange(0, 0);
+            ThrowIfFailed(m_indexBuffer->Map(0, &readRange, reinterpret_cast<void**>(&pIndexDataBegin)));
+            memcpy(pIndexDataBegin, indicies, sizeof(indicies));
+            m_indexBuffer->Unmap(0, nullptr);
+
+            m_indexBufferView.BufferLocation = m_indexBuffer->GetGPUVirtualAddress();
+            m_indexBufferView.Format = DXGI_FORMAT_R16_UINT;
+            m_indexBufferView.SizeInBytes = sizeof(indicies);
+        }
+
+        // Create a depth buffer.
+        {
+            D3D12_CLEAR_VALUE optimizedClearValue =
             {
-                .BufferLocation = m_constantBuffer->GetGPUVirtualAddress(),
-                .SizeInBytes = constantBufferSize
+                .Format = DXGI_FORMAT_D32_FLOAT,
+                .DepthStencil = { 1.0f, 0 }
             };
-            m_device->CreateConstantBufferView(&cbvDesc, m_cbvHeap->GetCPUDescriptorHandleForHeapStart());
 
-            // Map and initialize the constant buffer. We don't unmap this until the
-            // app closes. Keeping things mapped for the lifetime of the resource is okay.
-            CD3DX12_RANGE readRange(0, 0);        // We do not intend to read from this resource on the CPU.
-            ThrowIfFailed(m_constantBuffer->Map(0, &readRange, reinterpret_cast<void**>(&m_pCbvDataBegin)));
-            memcpy(m_pCbvDataBegin, &m_constantBufferData, sizeof(m_constantBufferData));
+            CD3DX12_HEAP_PROPERTIES heapProperties(D3D12_HEAP_TYPE_DEFAULT);
+            CD3DX12_RESOURCE_DESC resourceDesc = CD3DX12_RESOURCE_DESC::Tex2D(DXGI_FORMAT_D32_FLOAT, uWidth, uHeight, 1, 0, 1, 0, D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL);
+            ThrowIfFailed(m_device->CreateCommittedResource(
+                &heapProperties,
+                D3D12_HEAP_FLAG_NONE,
+                &resourceDesc,
+                D3D12_RESOURCE_STATE_DEPTH_WRITE,
+                &optimizedClearValue,
+                IID_PPV_ARGS(&m_depthBuffer)));
+
+            // Create a depth-stencil view
+            {
+                D3D12_DEPTH_STENCIL_VIEW_DESC dsv =
+                {
+                    .Format = DXGI_FORMAT_D32_FLOAT,
+                    .ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2D,
+                    .Flags = D3D12_DSV_FLAG_NONE,
+                    .Texture2D = {.MipSlice = 0 }
+                };
+                m_device->CreateDepthStencilView(m_depthBuffer.Get(), &dsv, m_dsvHeap->GetCPUDescriptorHandleForHeapStart());
+            }
         }
 
         // Create synchronization objects and wait until assets have been uploaded to the GPU.
@@ -384,7 +428,7 @@ namespace DX12Library
         }
 	}
 
-	void TriangleControlSample::CleanupDevice()
+	void SimpleCubeSample::CleanupDevice()
 	{
 		// Ensure that the GPU is no longer referencing resources that are about to be
 		// cleaned up by the destructor.
@@ -411,26 +455,30 @@ namespace DX12Library
 		CloseHandle(m_fenceEvent);
 	}
 
-    void TriangleControlSample::Update(_In_ FLOAT deltaTime)
-    {
+	void SimpleCubeSample::Update(_In_ FLOAT deltaTime)
+	{
         UNREFERENCED_PARAMETER(deltaTime);
 
-        if (m_mainWindow->GetGameMode() == 1)
-        {
-            m_constantBufferData.color = XMFLOAT4(1.0f, 0.0f, 0.0f, 1.0f);
-        }
-        if (m_mainWindow->GetGameMode() == 2)
-        {
-            m_constantBufferData.color = XMFLOAT4(0.0f, 1.0f, 0.0f, 1.0f);
-        }
-        if (m_mainWindow->GetGameMode() == 3)
-        {
-            m_constantBufferData.color = XMFLOAT4(0.0f, 0.0f, 1.0f, 1.0f);
-        }
-        memcpy(m_pCbvDataBegin, &m_constantBufferData, sizeof(m_constantBufferData));
-    }
+        // Update the model matrix.
+        const XMVECTOR rotationAxis = XMVectorSet(0, 1, 1, 0);
+        m_modelMatrix *= XMMatrixRotationAxis(rotationAxis, -2.0f * deltaTime);
 
-	void TriangleControlSample::Render()
+        // Update the view matrix.
+        const XMVECTOR eyePosition = XMVectorSet(0, 0, -10, 1);
+        const XMVECTOR focusPoint = XMVectorSet(0, 0, 0, 1);
+        const XMVECTOR upDirection = XMVectorSet(0, 1, 0, 0);
+        m_viewMatrix = XMMatrixLookAtLH(eyePosition, focusPoint, upDirection);
+
+        RECT rc;
+        GetClientRect(m_mainWindow->GetWindow(), &rc);
+        FLOAT uWidth = static_cast<FLOAT>(rc.right - rc.left);
+        FLOAT uHeight = static_cast<FLOAT>(rc.bottom - rc.top);
+        // Update the projection matrix.
+        float aspectRatio = uWidth / uHeight;
+        m_projectionMatrix = XMMatrixPerspectiveFovLH(XMConvertToRadians(45.0f), aspectRatio, 0.1f, 100.0f);
+	}
+
+	void SimpleCubeSample::Render()
 	{
         // Record all the commands we need to render the scene into the command list.
         // Command list allocators can only be reset when the associated 
@@ -446,10 +494,11 @@ namespace DX12Library
         // Set necessary state.
         m_commandList->SetGraphicsRootSignature(m_rootSignature.Get());
 
-        ID3D12DescriptorHeap* ppHeaps[] = { m_cbvHeap.Get() };
-        m_commandList->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
+        // Update the MVP matrix
+        XMMATRIX mvpMatrix = XMMatrixMultiply(m_modelMatrix, m_viewMatrix);
+        mvpMatrix = XMMatrixMultiply(mvpMatrix, m_projectionMatrix);
+        m_commandList->SetGraphicsRoot32BitConstants(0, sizeof(XMMATRIX) / 4, &mvpMatrix, 0);
 
-        m_commandList->SetGraphicsRootDescriptorTable(0, m_cbvHeap->GetGPUDescriptorHandleForHeapStart());
         m_commandList->RSSetViewports(1, &m_viewport);
         m_commandList->RSSetScissorRects(1, &m_scissorRect);
 
@@ -458,14 +507,17 @@ namespace DX12Library
         m_commandList->ResourceBarrier(1, &barrier);
 
         CD3DX12_CPU_DESCRIPTOR_HANDLE rtvHandle(m_rtvHeap->GetCPUDescriptorHandleForHeapStart(), m_frameIndex, m_rtvDescriptorSize);
-        m_commandList->OMSetRenderTargets(1, &rtvHandle, FALSE, nullptr);
+        CD3DX12_CPU_DESCRIPTOR_HANDLE dsvHandle(m_dsvHeap->GetCPUDescriptorHandleForHeapStart());
+        m_commandList->OMSetRenderTargets(1, &rtvHandle, FALSE, &dsvHandle);
 
         // Record commands.
         const float clearColor[] = { 0.0f, 0.2f, 0.4f, 1.0f };
         m_commandList->ClearRenderTargetView(rtvHandle, clearColor, 0, nullptr);
+        m_commandList->ClearDepthStencilView(dsvHandle, D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0, 0, nullptr);
         m_commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
         m_commandList->IASetVertexBuffers(0, 1, &m_vertexBufferView);
-        m_commandList->DrawInstanced(3, 1, 0, 0);
+        m_commandList->IASetIndexBuffer(&m_indexBufferView);
+        m_commandList->DrawIndexedInstanced(36, 1, 0, 0, 0);
 
         // Indicate that the back buffer will now be used to present.
         barrier = CD3DX12_RESOURCE_BARRIER::Transition(m_renderTargets[m_frameIndex].Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT);

@@ -12,7 +12,7 @@ namespace DX12Library
 
 		virtual void InitDevice();
 		virtual void CleanupDevice();
-        virtual void Update();
+        virtual void Update(_In_ FLOAT deltaTime);
 		virtual void Render();
 
 	private:

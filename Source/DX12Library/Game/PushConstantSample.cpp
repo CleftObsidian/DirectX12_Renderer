@@ -365,8 +365,9 @@ namespace DX12Library
         CloseHandle(m_fenceEvent);
     }
 
-    void PushConstantSample::Update()
+    void PushConstantSample::Update(_In_ FLOAT deltaTime)
     {
+        UNREFERENCED_PARAMETER(deltaTime);
     }
 
 	void PushConstantSample::Render()

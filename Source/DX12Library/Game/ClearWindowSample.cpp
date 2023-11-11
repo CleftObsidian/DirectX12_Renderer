@@ -229,8 +229,9 @@ namespace DX12Library
         CloseHandle(m_fenceEvent);
 	}
 
-    void ClearWindowSample::Update()
+    void ClearWindowSample::Update(_In_ FLOAT deltaTime)
     {
+        UNREFERENCED_PARAMETER(deltaTime);
     }
 
 	void ClearWindowSample::Render()

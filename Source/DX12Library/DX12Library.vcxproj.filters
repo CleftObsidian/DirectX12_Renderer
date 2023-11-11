@@ -57,6 +57,9 @@
     <ClInclude Include="Window\MainWindow.h">
       <Filter>Header Files\Window</Filter>
     </ClInclude>
+    <ClInclude Include="Game\SimpleCubeSample.h">
+      <Filter>Header Files\Game</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Game\TriangleControlSample.cpp">
@@ -73,6 +76,9 @@
     </ClCompile>
     <ClCompile Include="Window\MainWindow.cpp">
       <Filter>Source Files\Window</Filter>
+    </ClCompile>
+    <ClCompile Include="Game\SimpleCubeSample.cpp">
+      <Filter>Source Files\Game</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
