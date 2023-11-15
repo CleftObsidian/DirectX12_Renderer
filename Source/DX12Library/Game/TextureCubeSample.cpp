@@ -1,8 +1,8 @@
-#include "SimpleCubeSample.h"
+#include "TextureCubeSample.h"
 
 namespace DX12Library
 {
-	SimpleCubeSample::SimpleCubeSample(_In_ PCWSTR pszGameName)
+	TextureCubeSample::TextureCubeSample(_In_ PCWSTR pszGameName)
 		: GameSample(pszGameName)
 		, m_fenceEvent()
 		, m_fenceValue()
@@ -16,11 +16,11 @@ namespace DX12Library
 	{
 	}
 
-	SimpleCubeSample::~SimpleCubeSample()
+	TextureCubeSample::~TextureCubeSample()
 	{
 	}
 
-	void SimpleCubeSample::InitDevice()
+	void TextureCubeSample::InitDevice()
 	{
         RECT rc;
         GetClientRect(m_mainWindow->GetWindow(), &rc);
@@ -167,6 +167,15 @@ namespace DX12Library
             };
             ThrowIfFailed(m_device->CreateDescriptorHeap(&rtvHeapDesc, IID_PPV_ARGS(&m_rtvHeap)));
 
+            // Describe and create a shader resource view (SRV) heap for the texture.
+            D3D12_DESCRIPTOR_HEAP_DESC srvHeapDesc =
+            {
+                .Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
+                .NumDescriptors = 1,
+                .Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE
+            };
+            ThrowIfFailed(m_device->CreateDescriptorHeap(&srvHeapDesc, IID_PPV_ARGS(&m_srvHeap)));
+
             m_rtvDescriptorSize = m_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
 
             // Describe and create a depth stencil view (DSV) descriptor heap.
@@ -195,7 +204,7 @@ namespace DX12Library
         ThrowIfFailed(m_device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&m_commandAllocator)));
 
         // Load the sample assets.
-        // Create a root signature consisting of a descriptor table with a single CBV.
+        // Create a root signature.
         {
             D3D12_FEATURE_DATA_ROOT_SIGNATURE featureData =
             {
@@ -208,22 +217,34 @@ namespace DX12Library
                 featureData.HighestVersion = D3D_ROOT_SIGNATURE_VERSION_1_0;
             }
 
-            CD3DX12_DESCRIPTOR_RANGE1 ranges[1];
-            CD3DX12_ROOT_PARAMETER1 rootParameters[1];
+            CD3DX12_DESCRIPTOR_RANGE1 ranges[2];
+            CD3DX12_ROOT_PARAMETER1 rootParameters[2];
 
-            ranges[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_CBV, 1, 0, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC);
-            rootParameters[0].InitAsConstants(sizeof(XMMATRIX) / 4, 0, 0, D3D12_SHADER_VISIBILITY_VERTEX);
+            ranges[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC);
+            ranges[1].Init(D3D12_DESCRIPTOR_RANGE_TYPE_CBV, 1, 0, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC);
 
-            // Allow input layout and deny uneccessary access to certain pipeline stages.
-            D3D12_ROOT_SIGNATURE_FLAGS rootSignatureFlags =
-                D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT |
-                D3D12_ROOT_SIGNATURE_FLAG_DENY_HULL_SHADER_ROOT_ACCESS |
-                D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS |
-                D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS |
-                D3D12_ROOT_SIGNATURE_FLAG_DENY_PIXEL_SHADER_ROOT_ACCESS;
+            rootParameters[0].InitAsDescriptorTable(1, &ranges[0], D3D12_SHADER_VISIBILITY_PIXEL);
+            rootParameters[1].InitAsConstants(sizeof(XMMATRIX) / 4, 0, 0, D3D12_SHADER_VISIBILITY_VERTEX);
+
+            D3D12_STATIC_SAMPLER_DESC sampler =
+            {
+                .Filter = D3D12_FILTER_MIN_MAG_MIP_POINT,
+                .AddressU = D3D12_TEXTURE_ADDRESS_MODE_BORDER,
+                .AddressV = D3D12_TEXTURE_ADDRESS_MODE_BORDER,
+                .AddressW = D3D12_TEXTURE_ADDRESS_MODE_BORDER,
+                .MipLODBias = 0,
+                .MaxAnisotropy = 0,
+                .ComparisonFunc = D3D12_COMPARISON_FUNC_NEVER,
+                .BorderColor = D3D12_STATIC_BORDER_COLOR_TRANSPARENT_BLACK,
+                .MinLOD = 0.0f,
+                .MaxLOD = D3D12_FLOAT32_MAX,
+                .ShaderRegister = 0,
+                .RegisterSpace = 0,
+                .ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL
+            };
 
             CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC rootSignatureDesc;
-            rootSignatureDesc.Init_1_1(_countof(rootParameters), rootParameters, 0, nullptr, rootSignatureFlags);
+            rootSignatureDesc.Init_1_1(_countof(rootParameters), rootParameters, 1, &sampler, D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
 
             ComPtr<ID3DBlob> signature;
             ComPtr<ID3DBlob> error;
@@ -243,14 +264,14 @@ namespace DX12Library
             UINT compileFlags = 0;
 #endif
 
-            ThrowIfFailed(D3DCompileFromFile(L"Shaders/shadersCube.hlsl", nullptr, nullptr, "VSMain", "vs_5_1", compileFlags, 0, &vertexShader, nullptr));
-            ThrowIfFailed(D3DCompileFromFile(L"Shaders/shadersCube.hlsl", nullptr, nullptr, "PSMain", "ps_5_1", compileFlags, 0, &pixelShader, nullptr));
+            ThrowIfFailed(D3DCompileFromFile(L"Shaders/shadersTextureCube.hlsl", nullptr, nullptr, "VSMain", "vs_5_1", compileFlags, 0, &vertexShader, nullptr));
+            ThrowIfFailed(D3DCompileFromFile(L"Shaders/shadersTextureCube.hlsl", nullptr, nullptr, "PSMain", "ps_5_1", compileFlags, 0, &pixelShader, nullptr));
 
             // Define the vertex input layout.
             D3D12_INPUT_ELEMENT_DESC inputElementDescs[] =
             {
                 { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-                { "COLOR", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+                { "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 }
             };
 
             // Describe and create the graphics pipeline state object (PSO).
@@ -278,23 +299,40 @@ namespace DX12Library
         // Create the command list.
         ThrowIfFailed(m_device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, m_commandAllocator.Get(), m_pipelineState.Get(), IID_PPV_ARGS(&m_commandList)));
 
-        // Command lists are created in the recording state, but there is nothing
-        // to record yet. The main loop expects it to be closed, so close it now.
-        ThrowIfFailed(m_commandList->Close());
-
         // Create the vertex buffer.
         {
             // Define the geometry for a triangle.
-            VertexPosColor vertices[] =
+            constexpr Vertex vertices[] =
             {
-                { XMFLOAT3(-1.0f, -1.0f, -1.0f), XMFLOAT3(0.0f, 0.0f, 0.0f) }, // 0
-                { XMFLOAT3(-1.0f,  1.0f, -1.0f), XMFLOAT3(0.0f, 1.0f, 0.0f) }, // 1
-                { XMFLOAT3(1.0f,  1.0f, -1.0f), XMFLOAT3(1.0f, 1.0f, 0.0f) }, // 2
-                { XMFLOAT3(1.0f, -1.0f, -1.0f), XMFLOAT3(1.0f, 0.0f, 0.0f) }, // 3
-                { XMFLOAT3(-1.0f, -1.0f,  1.0f), XMFLOAT3(0.0f, 0.0f, 1.0f) }, // 4
-                { XMFLOAT3(-1.0f,  1.0f,  1.0f), XMFLOAT3(0.0f, 1.0f, 1.0f) }, // 5
-                { XMFLOAT3(1.0f,  1.0f,  1.0f), XMFLOAT3(1.0f, 1.0f, 1.0f) }, // 6
-                { XMFLOAT3(1.0f, -1.0f,  1.0f), XMFLOAT3(1.0f, 0.0f, 1.0f) }  // 7
+                {.Position = XMFLOAT3(-1.0f, 1.0f, -1.0f), .TexCoord = XMFLOAT2(1.0f, 0.0f), },
+                {.Position = XMFLOAT3(1.0f, 1.0f, -1.0f), .TexCoord = XMFLOAT2(0.0f, 0.0f), },
+                {.Position = XMFLOAT3(1.0f, 1.0f,  1.0f), .TexCoord = XMFLOAT2(0.0f, 1.0f), },
+                {.Position = XMFLOAT3(-1.0f, 1.0f,  1.0f), .TexCoord = XMFLOAT2(1.0f, 1.0f), },
+
+                {.Position = XMFLOAT3(-1.0f, -1.0f, -1.0f), .TexCoord = XMFLOAT2(0.0f, 0.0f), },
+                {.Position = XMFLOAT3(1.0f, -1.0f, -1.0f), .TexCoord = XMFLOAT2(1.0f, 0.0f), },
+                {.Position = XMFLOAT3(1.0f, -1.0f,  1.0f), .TexCoord = XMFLOAT2(1.0f, 1.0f), },
+                {.Position = XMFLOAT3(-1.0f, -1.0f,  1.0f), .TexCoord = XMFLOAT2(0.0f, 1.0f), },
+
+                {.Position = XMFLOAT3(-1.0f, -1.0f,  1.0f), .TexCoord = XMFLOAT2(0.0f, 1.0f), },
+                {.Position = XMFLOAT3(-1.0f, -1.0f, -1.0f), .TexCoord = XMFLOAT2(1.0f, 1.0f), },
+                {.Position = XMFLOAT3(-1.0f,  1.0f, -1.0f), .TexCoord = XMFLOAT2(1.0f, 0.0f), },
+                {.Position = XMFLOAT3(-1.0f,  1.0f,  1.0f), .TexCoord = XMFLOAT2(0.0f, 0.0f), },
+
+                {.Position = XMFLOAT3(1.0f, -1.0f,  1.0f), .TexCoord = XMFLOAT2(1.0f, 1.0f), },
+                {.Position = XMFLOAT3(1.0f, -1.0f, -1.0f), .TexCoord = XMFLOAT2(0.0f, 1.0f), },
+                {.Position = XMFLOAT3(1.0f,  1.0f, -1.0f), .TexCoord = XMFLOAT2(0.0f, 0.0f), },
+                {.Position = XMFLOAT3(1.0f,  1.0f,  1.0f), .TexCoord = XMFLOAT2(1.0f, 0.0f), },
+
+                {.Position = XMFLOAT3(-1.0f, -1.0f, -1.0f), .TexCoord = XMFLOAT2(0.0f, 1.0f), },
+                {.Position = XMFLOAT3(1.0f, -1.0f, -1.0f), .TexCoord = XMFLOAT2(1.0f, 1.0f), },
+                {.Position = XMFLOAT3(1.0f,  1.0f, -1.0f), .TexCoord = XMFLOAT2(1.0f, 0.0f), },
+                {.Position = XMFLOAT3(-1.0f,  1.0f, -1.0f), .TexCoord = XMFLOAT2(0.0f, 0.0f), },
+
+                {.Position = XMFLOAT3(-1.0f, -1.0f, 1.0f), .TexCoord = XMFLOAT2(1.0f, 1.0f), },
+                {.Position = XMFLOAT3(1.0f, -1.0f, 1.0f), .TexCoord = XMFLOAT2(0.0f, 1.0f), },
+                {.Position = XMFLOAT3(1.0f,  1.0f, 1.0f), .TexCoord = XMFLOAT2(0.0f, 0.0f), },
+                {.Position = XMFLOAT3(-1.0f,  1.0f, 1.0f), .TexCoord = XMFLOAT2(1.0f, 0.0f), },
             };
 
             const UINT vertexBufferSize = sizeof(vertices);
@@ -322,20 +360,31 @@ namespace DX12Library
 
             // Initialize the vertex buffer view.
             m_vertexBufferView.BufferLocation = m_vertexBuffer->GetGPUVirtualAddress();
-            m_vertexBufferView.StrideInBytes = sizeof(VertexPosColor);
+            m_vertexBufferView.StrideInBytes = sizeof(Vertex);
             m_vertexBufferView.SizeInBytes = vertexBufferSize;
         }
 
         // Create the index buffer.
         {
-            WORD indicies[36] =
+            constexpr WORD indicies[] =
             {
-                0, 1, 2, 0, 2, 3,
-                4, 6, 5, 4, 7, 6,
-                4, 5, 1, 4, 1, 0,
-                3, 2, 6, 3, 6, 7,
-                1, 5, 6, 1, 6, 2,
-                4, 0, 3, 4, 3, 7
+                3,1,0,
+                2,1,3,
+
+                6,4,5,
+                7,4,6,
+
+                11,9,8,
+                10,9,11,
+
+                14,12,13,
+                15,12,14,
+
+                19,17,16,
+                18,17,19,
+
+                22,20,21,
+                23,20,22
             };
 
             const UINT indexBufferSize = sizeof(indicies);
@@ -359,6 +408,75 @@ namespace DX12Library
             m_indexBufferView.BufferLocation = m_indexBuffer->GetGPUVirtualAddress();
             m_indexBufferView.Format = DXGI_FORMAT_R16_UINT;
             m_indexBufferView.SizeInBytes = sizeof(indicies);
+        }
+
+        // Note: ComPtr's are CPU objects but this resource needs to stay in scope until
+        // the command list that references it has finished executing on the GPU.
+        // We will flush the GPU at the end of this method to ensure the resource is not
+        // prematurely destroyed.
+        ComPtr<ID3D12Resource> textureUploadHeap;
+
+        // Create the texture.
+        {
+            // Describe and create a Texture2D.
+            D3D12_RESOURCE_DESC textureDesc =
+            {
+                .Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D,
+                .Width = TEXTURE_WIDTH,
+                .Height = TEXTURE_HEIGHT,
+                .DepthOrArraySize = 1,
+                .MipLevels = 1,
+                .Format = DXGI_FORMAT_R8G8B8A8_UNORM,
+                .SampleDesc = { .Count = 1, .Quality = 0 },
+                .Flags = D3D12_RESOURCE_FLAG_NONE
+            };
+
+            CD3DX12_HEAP_PROPERTIES heapProperties = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT);
+            ThrowIfFailed(m_device->CreateCommittedResource(
+                &heapProperties,
+                D3D12_HEAP_FLAG_NONE,
+                &textureDesc,
+                D3D12_RESOURCE_STATE_COPY_DEST,
+                nullptr,
+                IID_PPV_ARGS(&m_texture)));
+
+            const UINT64 uploadBufferSize = GetRequiredIntermediateSize(m_texture.Get(), 0, 1);
+
+            heapProperties = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD);
+            CD3DX12_RESOURCE_DESC resourceDesc = CD3DX12_RESOURCE_DESC::Buffer(uploadBufferSize);
+            // Create the GPU upload buffer.
+            ThrowIfFailed(m_device->CreateCommittedResource(
+                &heapProperties,
+                D3D12_HEAP_FLAG_NONE,
+                &resourceDesc,
+                D3D12_RESOURCE_STATE_GENERIC_READ,
+                nullptr,
+                IID_PPV_ARGS(&textureUploadHeap)));
+
+            // Copy data to the intermediate upload heap and then schedule a copy 
+            // from the upload heap to the Texture2D.
+            std::vector<UINT8> texture = GenerateTextureData();
+
+            D3D12_SUBRESOURCE_DATA textureData =
+            {
+                .pData = &texture[0],
+                .RowPitch = TEXTURE_WIDTH * TEXTURE_PIXEL_SIZE,
+                .SlicePitch = textureData.RowPitch * TEXTURE_HEIGHT
+            };
+
+            UpdateSubresources(m_commandList.Get(), m_texture.Get(), textureUploadHeap.Get(), 0, 0, 1, &textureData);
+            CD3DX12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::Transition(m_texture.Get(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+            m_commandList->ResourceBarrier(1, &barrier);
+
+            // Describe and create a SRV for the texture.
+            D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc =
+            {
+                .Format = textureDesc.Format,
+                .ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D,
+                .Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
+                .Texture2D = { .MipLevels = 1 }
+            };
+            m_device->CreateShaderResourceView(m_texture.Get(), &srvDesc, m_srvHeap->GetCPUDescriptorHandleForHeapStart());
         }
 
         // Create a depth buffer.
@@ -391,6 +509,11 @@ namespace DX12Library
                 m_device->CreateDepthStencilView(m_depthBuffer.Get(), &dsv, m_dsvHeap->GetCPUDescriptorHandleForHeapStart());
             }
         }
+
+        // Close the command list and execute it to begin the initial GPU setup.
+        ThrowIfFailed(m_commandList->Close());
+        ID3D12CommandList* ppCommandLists[] = { m_commandList.Get() };
+        m_commandQueue->ExecuteCommandLists(_countof(ppCommandLists), ppCommandLists);
 
         // Create synchronization objects and wait until assets have been uploaded to the GPU.
         {
@@ -428,34 +551,34 @@ namespace DX12Library
         }
 	}
 
-	void SimpleCubeSample::CleanupDevice()
+	void TextureCubeSample::CleanupDevice()
 	{
-		// Ensure that the GPU is no longer referencing resources that are about to be
-		// cleaned up by the destructor.
+        // Ensure that the GPU is no longer referencing resources that are about to be
+        // cleaned up by the destructor.
 
-		// WAITING FOR THE FRAME TO COMPLETE BEFORE CONTINUING IS NOT BEST PRACTICE.
-		// This is code implemented as such for simplicity. The D3D12HelloFrameBuffering
-		// sample illustrates how to use fences for efficient resource usage and to
-		// maximize GPU utilization.
+        // WAITING FOR THE FRAME TO COMPLETE BEFORE CONTINUING IS NOT BEST PRACTICE.
+        // This is code implemented as such for simplicity. The D3D12HelloFrameBuffering
+        // sample illustrates how to use fences for efficient resource usage and to
+        // maximize GPU utilization.
 
-		// Signal and increment the fence value.
-		const UINT64 fence = m_fenceValue;
-		ThrowIfFailed(m_commandQueue->Signal(m_fence.Get(), fence));
-		++m_fenceValue;
+        // Signal and increment the fence value.
+        const UINT64 fence = m_fenceValue;
+        ThrowIfFailed(m_commandQueue->Signal(m_fence.Get(), fence));
+        ++m_fenceValue;
 
-		// Wait until the previous frame is finished.
-		if (m_fence->GetCompletedValue() < fence)
-		{
-			ThrowIfFailed(m_fence->SetEventOnCompletion(fence, m_fenceEvent));
-			WaitForSingleObject(m_fenceEvent, INFINITE);
-		}
+        // Wait until the previous frame is finished.
+        if (m_fence->GetCompletedValue() < fence)
+        {
+            ThrowIfFailed(m_fence->SetEventOnCompletion(fence, m_fenceEvent));
+            WaitForSingleObject(m_fenceEvent, INFINITE);
+        }
 
-		m_frameIndex = m_swapChain->GetCurrentBackBufferIndex();
+        m_frameIndex = m_swapChain->GetCurrentBackBufferIndex();
 
-		CloseHandle(m_fenceEvent);
+        CloseHandle(m_fenceEvent);
 	}
 
-	void SimpleCubeSample::Update(_In_ FLOAT deltaTime)
+	void TextureCubeSample::Update(FLOAT deltaTime)
 	{
         // Update the model matrix.
         const XMVECTOR rotationAxis = XMVectorSet(0, 1, 1, 0);
@@ -476,7 +599,7 @@ namespace DX12Library
         m_projectionMatrix = XMMatrixPerspectiveFovLH(XMConvertToRadians(45.0f), aspectRatio, 0.1f, 100.0f);
 	}
 
-	void SimpleCubeSample::Render()
+	void TextureCubeSample::Render()
 	{
         // Record all the commands we need to render the scene into the command list.
         // Command list allocators can only be reset when the associated 
@@ -492,10 +615,15 @@ namespace DX12Library
         // Set necessary state.
         m_commandList->SetGraphicsRootSignature(m_rootSignature.Get());
 
+        ID3D12DescriptorHeap* ppHeaps[] = { m_srvHeap.Get() };
+        m_commandList->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
+
+        m_commandList->SetGraphicsRootDescriptorTable(0, m_srvHeap->GetGPUDescriptorHandleForHeapStart());
+
         // Update the MVP matrix
         XMMATRIX mvpMatrix = XMMatrixMultiply(m_modelMatrix, m_viewMatrix);
         mvpMatrix = XMMatrixMultiply(mvpMatrix, m_projectionMatrix);
-        m_commandList->SetGraphicsRoot32BitConstants(0, sizeof(XMMATRIX) / 4, &mvpMatrix, 0);
+        m_commandList->SetGraphicsRoot32BitConstants(1, sizeof(XMMATRIX) / 4, &mvpMatrix, 0);
 
         m_commandList->RSSetViewports(1, &m_viewport);
         m_commandList->RSSetScissorRects(1, &m_scissorRect);
@@ -549,4 +677,41 @@ namespace DX12Library
 
         m_frameIndex = m_swapChain->GetCurrentBackBufferIndex();
 	}
+
+    // Generate a simple black and white checkerboard texture.
+    std::vector<UINT8> TextureCubeSample::GenerateTextureData()
+    {
+        const UINT rowPitch = TEXTURE_WIDTH * TEXTURE_PIXEL_SIZE;
+        const UINT cellPitch = rowPitch >> 3;        // The width of a cell in the checkboard texture.
+        const UINT cellHeight = TEXTURE_WIDTH >> 3;    // The height of a cell in the checkerboard texture.
+        const UINT textureSize = rowPitch * TEXTURE_HEIGHT;
+
+        std::vector<UINT8> data(textureSize);
+        UINT8* pData = &data[0];
+
+        for (UINT n = 0; n < textureSize; n += TEXTURE_PIXEL_SIZE)
+        {
+            UINT x = n % rowPitch;
+            UINT y = n / rowPitch;
+            UINT i = x / cellPitch;
+            UINT j = y / cellHeight;
+
+            if (i % 2 == j % 2)
+            {
+                pData[n] = 0x00;        // R
+                pData[n + 1] = 0x00;    // G
+                pData[n + 2] = 0x00;    // B
+                pData[n + 3] = 0xff;    // A
+            }
+            else
+            {
+                pData[n] = 0xff;        // R
+                pData[n + 1] = 0xff;    // G
+                pData[n + 2] = 0xff;    // B
+                pData[n + 3] = 0xff;    // A
+            }
+        }
+
+        return data;
+    }
 }
