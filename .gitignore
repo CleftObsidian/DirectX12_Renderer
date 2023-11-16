@@ -8,3 +8,4 @@
 .vs/
 
 !*.sin
+!External/DirectXTK12/Library
