@@ -418,7 +418,7 @@ namespace DX12Library
 
             resourceUpload.Begin();
 
-            ThrowIfFailed(CreateDDSTextureFromFile(m_device.Get(), resourceUpload, L"Texture/brickwall.dds", m_texture.ReleaseAndGetAddressOf()));
+            ThrowIfFailed(CreateDDSTextureFromFile(m_device.Get(), resourceUpload, L"Contents/Texture/brickwall.dds", m_texture.ReleaseAndGetAddressOf()));
 
             D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc =
             {

@@ -34,4 +34,6 @@
 #include <DirectXColors.h>
 #include "Resource.h"
 
+#define ASSIMP_LOAD_FLAGS (aiProcess_Triangulate | aiProcess_GenSmoothNormals | aiProcess_FlipUVs | aiProcess_JoinIdenticalVertices | aiProcess_ConvertToLeftHanded | aiProcess_CalcTangentSpace)
+
 constexpr LPCWSTR PSZ_TITLE = L"DX12 Renderer";

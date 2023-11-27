@@ -7,5 +7,10 @@
 # Visual Studio cache/options directory
 .vs/
 
+# Large resources
+[Ss]ource/Game/Contents/Texture/*
+
 !*.sin
 !External/DirectXTK12/Library
+!External/Assimp/Library
+!Source/Game/Contents/Texture/brickwall.dds
