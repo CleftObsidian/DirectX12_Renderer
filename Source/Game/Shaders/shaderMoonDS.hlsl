@@ -26,9 +26,9 @@ struct HSOutput
 struct DSOutput
 {
     float4 position : SV_POSITION;
-    float3 worldPos : POSITION;
     float2 texCoord : TEXCOORD;
     float3 normal : NORMAL;
+    float3 worldPos : POSITION;
 };
 
 #define NUM_CONTROL_POINTS 3
@@ -39,25 +39,21 @@ DSOutput DSMain(
 	float3 uvwCoord : SV_DomainLocation,
 	const OutputPatch<HSOutput, NUM_CONTROL_POINTS> patch)
 {
-    float3 vertexPosition;
-    float3 vertexNormal;
-    float2 textureCoord;
     DSOutput output;
     
-    vertexPosition = uvwCoord.x * patch[0].position + uvwCoord.y * patch[1].position + uvwCoord.z * patch[2].position;
-    vertexNormal = uvwCoord.x * patch[0].normal + uvwCoord.y * patch[1].normal + uvwCoord.z * patch[2].normal;
-    textureCoord = uvwCoord.x * patch[0].texCoord + uvwCoord.y * patch[1].texCoord + uvwCoord.z * patch[2].texCoord;
-    
-    output.position = mul(float4(vertexPosition, 1.0f), cbPerFrame.World);
-    output.normal = mul(float4(vertexNormal, 1.0f), cbPerFrame.World);
-    output.texCoord = textureCoord;
+    float3 vertexPosition = uvwCoord.x * patch[0].position + uvwCoord.y * patch[1].position + uvwCoord.z * patch[2].position;
+    output.texCoord = uvwCoord.x * patch[0].texCoord + uvwCoord.y * patch[1].texCoord + uvwCoord.z * patch[2].texCoord;
+    output.normal = uvwCoord.x * patch[0].normal + uvwCoord.y * patch[1].normal + uvwCoord.z * patch[2].normal;
 
-    float displacementScale = 10.0f;
-    //output.position += displacementScale * displacementmap.SampleLevel(displacementsampler, output.texCoord, 0.0f).r * output.normal;
+    float displacement = displacementmap.SampleLevel(displacementsampler, output.texCoord.xy, 0.0f).r;
+    displacement *= 0.003f;   // scale
+    displacement += 0.0f;   // bias
+    vertexPosition += output.normal * displacement;
     
+    output.position = mul(cbPerFrame.World, float4(vertexPosition, 1.0f));
     output.worldPos = output.position;
-    output.position = mul(output.position, cbPerFrame.View);
-    output.position = mul(output.position, cbPerFrame.Projection);
+    output.position = mul(cbPerFrame.View, output.position);
+    output.position = mul(cbPerFrame.Projection, output.position);
 
 	return output;
 }

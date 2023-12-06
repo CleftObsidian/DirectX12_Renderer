@@ -13,9 +13,9 @@ SamplerState g_sampler : register(s0);
 struct DSOutput
 {
     float4 position : SV_POSITION;
-    float3 worldPos : POSITION;
     float2 texCoord : TEXCOORD;
     float3 normal : NORMAL;
+    float3 worldPos : POSITION;
 };
 
 float4 PSMain(DSOutput input) : SV_TARGET
@@ -28,8 +28,6 @@ float4 PSMain(DSOutput input) : SV_TARGET
     
     float3 viewDirection = normalize(cbPerFrame.CameraPos - input.worldPos);
     float3 reflectDirection = reflect(-directionalLightDirection, input.normal);
-    float shiness = 20.0f;
-    float3 specular = pow(saturate(dot(reflectDirection, viewDirection)), shiness);
     
-    return float4(ambient + diffuse + specular, 1.0f) * g_texture.Sample(g_sampler, input.texCoord);
+    return float4(ambient + diffuse, 1.0f) * g_texture.Sample(g_sampler, input.texCoord);
 }

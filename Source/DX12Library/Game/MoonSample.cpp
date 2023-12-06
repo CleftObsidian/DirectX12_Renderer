@@ -21,7 +21,7 @@ namespace DX12Library
 		, m_indexBufferView()
 		, m_constantBuffer()
 		, m_pScene(nullptr)
-        , m_camera(XMVectorSet(0.0f, 0.0f, -10.0f, 0.0f))
+        , m_camera(XMVectorSet(0.0f, 0.0f, -5.0f, 0.0f))
 	{
 	}
 
@@ -262,8 +262,8 @@ namespace DX12Library
         {
             ComPtr<ID3DBlob> vertexShader;
             ComPtr<ID3DBlob> pixelShader;
-            //ComPtr<ID3DBlob> domainShader;
-            //ComPtr<ID3DBlob> hullShader;
+            ComPtr<ID3DBlob> domainShader;
+            ComPtr<ID3DBlob> hullShader;
 
 #if defined(_DEBUG)
             // Enable better shader debugging with the graphics debugging tools.
@@ -272,10 +272,10 @@ namespace DX12Library
             UINT compileFlags = 0;
 #endif
             
-            ThrowIfFailed(D3DCompileFromFile(L"Shaders/shadersDirectionalLight.hlsl", nullptr, nullptr, "VSMain", "vs_5_1", compileFlags, 0, &vertexShader, nullptr));
-            ThrowIfFailed(D3DCompileFromFile(L"Shaders/shadersDirectionalLight.hlsl", nullptr, nullptr, "PSMain", "ps_5_1", compileFlags, 0, &pixelShader, nullptr));
-            //ThrowIfFailed(D3DCompileFromFile(L"Shaders/shaderMoonDS.hlsl", nullptr, nullptr, "DSMain", "ds_5_1", compileFlags, 0, &domainShader, nullptr));
-            //ThrowIfFailed(D3DCompileFromFile(L"Shaders/shaderMoonHS.hlsl", nullptr, nullptr, "HSMain", "hs_5_1", compileFlags, 0, &hullShader, nullptr));
+            ThrowIfFailed(D3DCompileFromFile(L"Shaders/shaderMoonVS.hlsl", nullptr, nullptr, "VSMain", "vs_5_1", compileFlags, 0, &vertexShader, nullptr));
+            ThrowIfFailed(D3DCompileFromFile(L"Shaders/shaderMoonPS.hlsl", nullptr, nullptr, "PSMain", "ps_5_1", compileFlags, 0, &pixelShader, nullptr));
+            ThrowIfFailed(D3DCompileFromFile(L"Shaders/shaderMoonDS.hlsl", nullptr, nullptr, "DSMain", "ds_5_1", compileFlags, 0, &domainShader, nullptr));
+            ThrowIfFailed(D3DCompileFromFile(L"Shaders/shaderMoonHS.hlsl", nullptr, nullptr, "HSMain", "hs_5_1", compileFlags, 0, &hullShader, nullptr));
 
             // Define the vertex input layout.
             D3D12_INPUT_ELEMENT_DESC inputElementDescs[] =
@@ -291,16 +291,15 @@ namespace DX12Library
                 .pRootSignature = m_rootSignature.Get(),
                 .VS = CD3DX12_SHADER_BYTECODE(vertexShader.Get()),
                 .PS = CD3DX12_SHADER_BYTECODE(pixelShader.Get()),
-                //.DS = CD3DX12_SHADER_BYTECODE(domainShader.Get()),
-                //.HS = CD3DX12_SHADER_BYTECODE(hullShader.Get()),
+                .DS = CD3DX12_SHADER_BYTECODE(domainShader.Get()),
+                .HS = CD3DX12_SHADER_BYTECODE(hullShader.Get()),
                 .BlendState = CD3DX12_BLEND_DESC(D3D12_DEFAULT),
                 .SampleMask = UINT_MAX,
                 .RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT),
                 .DepthStencilState = CD3DX12_DEPTH_STENCIL_DESC(D3D12_DEFAULT),
                 .InputLayout = { .pInputElementDescs = inputElementDescs,
                                  .NumElements = _countof(inputElementDescs) },
-                //.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_PATCH,
-                .PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE,
+                .PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_PATCH,
                 .NumRenderTargets = 1,
                 .RTVFormats = { DXGI_FORMAT_R8G8B8A8_UNORM, },
                 .DSVFormat = DXGI_FORMAT_D32_FLOAT,
@@ -654,10 +653,6 @@ namespace DX12Library
 	{
         m_camera.Update(deltaTime);
 
-        // Update the model matrix.
-        //m_constantBuffer.World *= XMMatrixScaling(1.001f, 1.001f, 1.001f);
-        //m_constantBuffer.World = XMMatrixScaling(100.0f, 100.0f, 100.0f);
-
 		// Update the view matrix.
 		m_constantBuffer.View = m_camera.GetView();
 		XMStoreFloat3(&m_constantBuffer.CameraPos, m_camera.GetEye());
@@ -709,14 +704,12 @@ namespace DX12Library
         m_commandList->OMSetRenderTargets(1, &rtvHandle, FALSE, &dsvHandle);
 
         // Record commands.
-        const float clearColor[] = { 0.0f, 0.2f, 0.4f, 1.0f };
+        const float clearColor[] = { 0.1f, 0.1f, 0.1f, 1.0f };
         m_commandList->ClearRenderTargetView(rtvHandle, clearColor, 0, nullptr);
         m_commandList->ClearDepthStencilView(dsvHandle, D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0, 0, nullptr);
-        //m_commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_3_CONTROL_POINT_PATCHLIST);
-        m_commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+        m_commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_3_CONTROL_POINT_PATCHLIST);
         m_commandList->IASetVertexBuffers(0, 1, &m_vertexBufferView);
         m_commandList->IASetIndexBuffer(&m_indexBufferView);
-        //m_commandList->DrawInstanced(static_cast<UINT>(m_aIndices.size()), 1, 0, 0);
         m_commandList->DrawIndexedInstanced(static_cast<UINT>(m_aIndices.size()), 1, 0, 0, 0);
 
         // Indicate that the back buffer will now be used to present.
