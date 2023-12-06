@@ -19,9 +19,15 @@ namespace DX12Library
         HRESULT Initialize(_In_ HINSTANCE hInstance, _In_ INT nCmdShow, _In_ PCWSTR pszWindowName) override;
         PCWSTR GetWindowClassName() const override;
         LRESULT HandleMessage(_In_ UINT uMsg, _In_ WPARAM wParam, _In_ LPARAM lParam) override;
-        UINT GetGameMode() const;
+
+        const UINT GetGameMode() const;
+        const DirectionsInput& GetDirections() const;
+        const MouseRelativeMovement& GetMouseRelativeMovement() const;
+        void ResetMouseMovement();
 
     private:
         UINT m_gameMode;
+        DirectionsInput m_directions;
+        MouseRelativeMovement m_mouseRelativeMovement;
     };
 }

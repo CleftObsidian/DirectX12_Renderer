@@ -37,3 +37,21 @@
 #define ASSIMP_LOAD_FLAGS (aiProcess_Triangulate | aiProcess_GenSmoothNormals | aiProcess_FlipUVs | aiProcess_JoinIdenticalVertices | aiProcess_ConvertToLeftHanded | aiProcess_CalcTangentSpace)
 
 constexpr LPCWSTR PSZ_TITLE = L"DX12 Renderer";
+
+using namespace DirectX;
+
+struct DirectionsInput
+{
+    BOOL bFront;
+    BOOL bLeft;
+    BOOL bBack;
+    BOOL bRight;
+    BOOL bUp;
+    BOOL bDown;
+};
+
+struct MouseRelativeMovement
+{
+    LONG X;
+    LONG Y;
+};

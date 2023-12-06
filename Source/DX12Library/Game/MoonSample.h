@@ -25,6 +25,7 @@ namespace DX12Library
 
         virtual void InitDevice();
         virtual void CleanupDevice();
+        virtual void HandleInput(_In_ const DirectionsInput& directions, _In_ const MouseRelativeMovement& mouseRelativeMovement, _In_ FLOAT deltaTime);
         virtual void Update(_In_ FLOAT deltaTime);
         virtual void Render();
 
@@ -107,5 +108,7 @@ namespace DX12Library
         const aiScene* m_pScene;
 
         std::vector<BasicMeshEntry> m_aMeshes;
+
+        Camera m_camera;
 	};
 }

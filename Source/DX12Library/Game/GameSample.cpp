@@ -12,7 +12,7 @@ namespace DX12Library
     {
     }
 
-    HRESULT GameSample::Initialize(HINSTANCE hInstance, INT nCmdShow)
+    HRESULT GameSample::Initialize(_In_ HINSTANCE hInstance, _In_ INT nCmdShow)
     {
         if (FAILED(m_mainWindow->Initialize(hInstance, nCmdShow, m_pszGameName)))
         {
@@ -53,6 +53,10 @@ namespace DX12Library
                 deltaTime = static_cast<FLOAT>(CurrentTime.QuadPart - LastTime.QuadPart);
                 deltaTime /= static_cast<FLOAT>(Frequency.QuadPart);
                 LastTime = CurrentTime;
+
+                // Handle input
+                HandleInput(m_mainWindow->GetDirections(), m_mainWindow->GetMouseRelativeMovement(), deltaTime);
+                m_mainWindow->ResetMouseMovement();
 
                 // Render
                 Update(deltaTime);

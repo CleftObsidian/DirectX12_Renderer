@@ -25,6 +25,12 @@
     <Filter Include="Source Files\Window">
       <UniqueIdentifier>{fe58f599-1a16-4883-8138-0cb5d003c5f2}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Header Files\Camera">
+      <UniqueIdentifier>{c028e00d-0a2e-4ddd-8b3b-57531b54f20e}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\Camera">
+      <UniqueIdentifier>{642c5213-7b88-414a-b150-e8caf200f804}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="d3dx12.h">
@@ -69,6 +75,9 @@
     <ClInclude Include="Game\MoonSample.h">
       <Filter>Header Files\Game</Filter>
     </ClInclude>
+    <ClInclude Include="Camera\Camera.h">
+      <Filter>Header Files\Camera</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Game\TriangleControlSample.cpp">
@@ -97,6 +106,9 @@
     </ClCompile>
     <ClCompile Include="Game\MoonSample.cpp">
       <Filter>Source Files\Game</Filter>
+    </ClCompile>
+    <ClCompile Include="Camera\Camera.cpp">
+      <Filter>Source Files\Camera</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>

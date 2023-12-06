@@ -109,6 +109,7 @@ xcopy /y /d "$(SolutionDir)..\External\Assimp\Binary\x64\Release\assimp-vc143-mt
     </FxCompile>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="Camera\Camera.cpp" />
     <ClCompile Include="Game\ClearWindowSample.cpp" />
     <ClCompile Include="Game\DirectionalLightSample.cpp" />
     <ClCompile Include="Game\GameSample.cpp" />
@@ -120,6 +121,7 @@ xcopy /y /d "$(SolutionDir)..\External\Assimp\Binary\x64\Release\assimp-vc143-mt
     <ClCompile Include="Window\MainWindow.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="Camera\Camera.h" />
     <ClInclude Include="d3dx12.h" />
     <ClInclude Include="DXSampleHelper.h" />
     <ClInclude Include="Game\ClearWindowSample.h" />

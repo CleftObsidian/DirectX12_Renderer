@@ -21,6 +21,7 @@ namespace DX12Library
 		, m_indexBufferView()
 		, m_constantBuffer()
 		, m_pScene(nullptr)
+        , m_camera(XMVectorSet(0.0f, 0.0f, -10.0f, 0.0f))
 	{
 	}
 
@@ -447,7 +448,7 @@ namespace DX12Library
             m_vertexBufferView.BufferLocation = m_vertexBuffer->GetGPUVirtualAddress();
             m_vertexBufferView.StrideInBytes = sizeof(Vertex);
             m_vertexBufferView.SizeInBytes = vertexBufferSize;
-
+            
             UINT indexBufferSize = static_cast<UINT>(sizeof(WORD) * m_aIndices.size());
             // Create the index buffer.
             {
@@ -644,18 +645,22 @@ namespace DX12Library
 		CloseHandle(m_fenceEvent);
 	}
 
-	void MoonSample::Update(FLOAT deltaTime)
+    void MoonSample::HandleInput(_In_ const DirectionsInput& directions, _In_ const MouseRelativeMovement& mouseRelativeMovement, _In_ FLOAT deltaTime)
+    {
+        m_camera.HandleInput(directions, mouseRelativeMovement, deltaTime);
+    }
+
+	void MoonSample::Update(_In_ FLOAT deltaTime)
 	{
-        UNREFERENCED_PARAMETER(deltaTime);
+        m_camera.Update(deltaTime);
+
         // Update the model matrix.
         //m_constantBuffer.World *= XMMatrixScaling(1.001f, 1.001f, 1.001f);
+        //m_constantBuffer.World = XMMatrixScaling(100.0f, 100.0f, 100.0f);
 
 		// Update the view matrix.
-		const XMVECTOR eyePosition = XMVectorSet(0, 0, -10, 1);
-		const XMVECTOR focusPoint = XMVectorSet(0, 0, 0, 1);
-		const XMVECTOR upDirection = XMVectorSet(0, 1, 0, 0);
-		m_constantBuffer.View = XMMatrixLookAtLH(eyePosition, focusPoint, upDirection);
-		XMStoreFloat3(&m_constantBuffer.CameraPos, eyePosition);
+		m_constantBuffer.View = m_camera.GetView();
+		XMStoreFloat3(&m_constantBuffer.CameraPos, m_camera.GetEye());
 
 		RECT rc;
 		GetClientRect(m_mainWindow->GetWindow(), &rc);
@@ -711,6 +716,7 @@ namespace DX12Library
         m_commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
         m_commandList->IASetVertexBuffers(0, 1, &m_vertexBufferView);
         m_commandList->IASetIndexBuffer(&m_indexBufferView);
+        //m_commandList->DrawInstanced(static_cast<UINT>(m_aIndices.size()), 1, 0, 0);
         m_commandList->DrawIndexedInstanced(static_cast<UINT>(m_aIndices.size()), 1, 0, 0, 0);
 
         // Indicate that the back buffer will now be used to present.

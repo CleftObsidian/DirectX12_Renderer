@@ -2,6 +2,7 @@
 
 #include "DXSampleHelper.h"
 #include "Window/MainWindow.h"
+#include "Camera/Camera.h"
 
 using namespace DirectX;
 
@@ -18,6 +19,7 @@ namespace DX12Library
 
 		virtual void InitDevice() = 0;
 		virtual void CleanupDevice() = 0;
+		virtual void HandleInput(_In_ const DirectionsInput& directions, _In_ const MouseRelativeMovement& mouseRelativeMovement, _In_ FLOAT deltaTime) = 0;
 		virtual void Update(_In_ FLOAT deltaTime) = 0;
 		virtual void Render() = 0;
 

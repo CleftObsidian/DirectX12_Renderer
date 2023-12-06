@@ -26,7 +26,7 @@ HS_CONSTANT_DATA_OUTPUT CalcHSPatchConstants(
 {
 	HS_CONSTANT_DATA_OUTPUT output;
 
-    float tessellationAmount = 12.0f;
+    float tessellationAmount = 2.0f;
     
     output.Edges[0] = tessellationAmount;
     output.Edges[1] = tessellationAmount;
@@ -38,7 +38,7 @@ HS_CONSTANT_DATA_OUTPUT CalcHSPatchConstants(
 }
 
 [domain("tri")]
-[partitioning("integer")]
+[partitioning("fractional_odd")]
 [outputtopology("triangle_cw")]
 [outputcontrolpoints(NUM_CONTROL_POINTS)]
 [patchconstantfunc("CalcHSPatchConstants")]

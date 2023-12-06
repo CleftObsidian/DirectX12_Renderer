@@ -10,16 +10,15 @@ ConstantBuffer<cbEveryFrame> cbPerFrame : register(b0);
 Texture2D g_texture : register(t0);
 SamplerState g_sampler : register(s0);
 
-struct VSOutput
+struct DSOutput
 {
-    float4 svPosition : SV_POSITION;
-    float3 position : POSITION;
-    float3 worldPos : WPOSITION;
-    float2 uv : TEXCOORD;
+    float4 position : SV_POSITION;
+    float3 worldPos : POSITION;
+    float2 texCoord : TEXCOORD;
     float3 normal : NORMAL;
 };
 
-float4 PSMain(VSOutput input) : SV_TARGET
+float4 PSMain(DSOutput input) : SV_TARGET
 {
     float3 directionalLightDirection = float3(-1.0f, -1.0f, -1.0f);
     
@@ -32,5 +31,5 @@ float4 PSMain(VSOutput input) : SV_TARGET
     float shiness = 20.0f;
     float3 specular = pow(saturate(dot(reflectDirection, viewDirection)), shiness);
     
-    return float4(ambient + diffuse + specular, 1.0f) * g_texture.Sample(g_sampler, input.uv);
+    return float4(ambient + diffuse + specular, 1.0f) * g_texture.Sample(g_sampler, input.texCoord);
 }
