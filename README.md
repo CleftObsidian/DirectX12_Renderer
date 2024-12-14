@@ -1,6 +1,7 @@
 # DirectX 12 Renderer
 based on [MiniEngine](https://github.com/microsoft/DirectX-Graphics-Samples) and [LearningDirectX12](https://github.com/jpvanoosten/LearningDirectX12)  
 
+[Space walk video](https://youtu.be/RrsHbfjaySM)
 
 ## Settings
 working on C++20 with Visual Studio 2022
